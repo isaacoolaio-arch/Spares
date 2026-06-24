@@ -2354,11 +2354,22 @@ async function loadAll() {
 
   const syncFromServer = async (attempt) => {
     try {
-      const [core, tx] = await Promise.all([
-        api('getCoreData'),
-        api('getTransactions')
-      ]);
-      if (!core.success || !tx.success) throw new Error('Bad response');
+      // Try new split API first, fall back to legacy getAll if not available
+      let core, tx;
+      try {
+        [core, tx] = await Promise.all([
+          api('getCoreData'),
+          api('getTransactions')
+        ]);
+        if (!core.success || !tx.success) throw new Error('Bad response');
+      } catch(splitErr) {
+        // Fallback to legacy getAll (old backend)
+        console.log('Split API failed, trying legacy getAll...');
+        const res = await api('getAll');
+        if (!res.success) throw new Error(res.error || 'getAll failed');
+        core = { ...res, success: true };
+        tx   = { sales: res.sales || [], purchases: res.purchases || [], success: true };
+      }
 
       const rawParts = core.parts || [];
       rawParts.sort((a, b) => {
