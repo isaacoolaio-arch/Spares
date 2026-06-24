@@ -5478,7 +5478,10 @@ function renderChecklist() {
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:11px;color:var(--text3)">Tap circle: 📌 Pending → ⟳ Ordered → ✓ Received</div>
-      ${received.length > 0 ? `<button onclick="clearReceived()" style="background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:var(--green);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">🗑 Clear ${received.length} Received</button>` : ''}
+      <div style="display:flex;gap:6px">
+        ${received.length > 0 ? `<button onclick="clearReceived()" style="background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:var(--green);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">🗑 Clear ${received.length} received</button>` : ''}
+        <button onclick="clearAllChecklist()" style="background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.25);color:var(--red);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✕ Clear all</button>
+      </div>
     </div>`;
 
   document.getElementById('tx-content').innerHTML =
@@ -5510,6 +5513,17 @@ async function clearReceived() {
   await loadAll();
   renderChecklist();
   toast(`✓ Cleared ${received.length} received items`, 'success');
+}
+
+async function clearAllChecklist() {
+  if (!confirm(`Remove all ${state.checklist.length} items from checklist?`)) return;
+  toast('Clearing...', 'success');
+  for (const i of state.checklist) {
+    try { await api('deleteChecklistItem', { ItemID: i.ItemID }); } catch(e) {}
+  }
+  await loadAll();
+  renderChecklist();
+  toast('✓ Checklist cleared', 'success');
 }
 
 // ============================================================
@@ -6266,7 +6280,7 @@ async function autoAddLowStock() {
     try {
       const reorder = parseInt(p.ReorderLevel)||5;
       const qty = parseInt(p.StockQty)||0;
-      const needed = Math.max(reorder - qty + reorder, reorder); // restock to 2× reorder level
+      const needed = reorder; // order up to reorder level qty
       const res = await api('saveChecklistItem', {
         PartID: p.PartID,
         PartName: p.Name || p.ItemName,
