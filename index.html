@@ -416,13 +416,17 @@
       display: flex; align-items: center; gap: 12px;
     }
     .check-box {
-      width: 22px; height: 22px; border-radius: 7px;
+      width: 26px; height: 26px; border-radius: 8px;
       border: 2px solid var(--border2); flex-shrink: 0; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
-      transition: all .14s;
+      transition: all .15s; font-size: 13px; font-weight: 900; color: #fff;
+      user-select: none;
     }
-    .check-box.checked { background: var(--green); border-color: var(--green); }
+    .check-box:active { transform: scale(.88); }
     .check-box.ordered { background: var(--blue); border-color: var(--blue); }
+    .check-box.checked { background: var(--green); border-color: var(--green); }
+    .check-item { transition: opacity .2s; }
+    .check-item.fading { opacity: .4; }
 
     /* ── TOAST ── */
     .toast {
@@ -5481,30 +5485,42 @@ function renderChecklist() {
     </button>`;
   };
 
-  const section = (title, list, status) => list.length === 0 ? '' : `
-    <div class="section-label">${title}</div>
+  const statusColor = { 'Pending': 'var(--red)', 'Ordered': 'var(--blue)', 'Received': 'var(--green)' };
+  const nextLabel   = { 'Pending': 'Tap → Ordered', 'Ordered': 'Tap → Received', 'Received': 'Tap → reset' };
+
+  const section = (title, list, status) => {
+    if (list.length === 0) return '';
+    const bulkBtn = status === 'Pending' ? `
+      <button onclick="markAllOrdered()" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:var(--blue);border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">⟳ Mark all ordered</button>` : '';
+    return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px">
+      <div class="section-label" style="margin:0">${title} <span style="color:var(--text3);font-weight:500;font-size:12px">(${list.length})</span></div>
+      ${bulkBtn}
+    </div>
     ${list.map(i => {
       const s = stockMap[i.PartID];
       const stockBadge = s
         ? s.qty <= 0
-          ? `<span style="font-size:10px;font-weight:800;color:var(--red);background:rgba(255,80,80,.12);padding:2px 6px;border-radius:6px;margin-left:6px">OUT</span>`
+          ? \`<span style="font-size:10px;font-weight:800;color:var(--red);background:rgba(255,80,80,.12);padding:2px 6px;border-radius:6px;margin-left:6px">OUT</span>\`
           : s.qty <= s.reorder
-            ? `<span style="font-size:10px;font-weight:800;color:var(--accent);background:rgba(240,165,0,.12);padding:2px 6px;border-radius:6px;margin-left:6px">LOW ${s.qty}</span>`
+            ? \`<span style="font-size:10px;font-weight:800;color:var(--accent);background:rgba(240,165,0,.12);padding:2px 6px;border-radius:6px;margin-left:6px">LOW \${s.qty}</span>\`
             : ''
         : '';
-      return `
-      <div class="check-item">
-        <div class="check-box ${status === 'Ordered' ? 'ordered' : status === 'Received' ? 'checked' : ''}"
-             onclick="cycleCheckStatus('${i.ItemID}', '${i.Status}')">
-          ${status === 'Received' ? '✓' : status === 'Ordered' ? '⟳' : ''}
+      return \`
+      <div class="check-item" id="ci-\${i.ItemID}">
+        <div class="check-box \${status === 'Ordered' ? 'ordered' : status === 'Received' ? 'checked' : ''}"
+             onclick="cycleCheckStatus('\${i.ItemID}', '\${i.Status}')"
+             title="\${nextLabel[status]}">
+          \${status === 'Received' ? '✓' : status === 'Ordered' ? '⟳' : ''}
         </div>
-        <div style="flex:1">
-          <div style="font-size:15px;font-weight:700">${i.PartName}${stockBadge}</div>
-          <div style="font-size:12px;color:var(--text2)">Need: ${i.TargetQty} · ${i.Priority||'Normal'}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">\${i.PartName}\${stockBadge}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Need: \${i.TargetQty} · \${i.Priority||'Normal'} · <span style="color:\${statusColor[status]}">\${status}</span></div>
         </div>
-        <button onclick="deleteChecklistItem('${i.ItemID}')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">×</button>
-      </div>`;
+        <button onclick="deleteChecklistItem('\${i.ItemID}')" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0">×</button>
+      </div>\`;
     }).join('')}`;
+  };
 
   const summary = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
@@ -5549,15 +5565,56 @@ function setChecklistFilter(f) {
   renderChecklist();
 }
 
+async function markAllOrdered() {
+  const pending = state.checklist.filter(i => i.Status === 'Pending');
+  if (pending.length === 0) return;
+  // Optimistic update
+  pending.forEach(i => i.Status = 'Ordered');
+  renderChecklist();
+  // Sync all to server in parallel
+  try {
+    await Promise.all(pending.map(i => api('updateChecklistStatus', { ItemID: i.ItemID, Status: 'Ordered' })));
+    toast(`✓ ${pending.length} items marked as Ordered`, 'success');
+  } catch(e) {
+    toast('Some updates failed — tap Sync to retry', 'error');
+  }
+}
+
 async function cycleCheckStatus(itemId, current) {
   const next = current === 'Pending' ? 'Ordered' : current === 'Ordered' ? 'Received' : 'Pending';
-  await api('updateChecklistStatus', { ItemID: itemId, Status: next });
-  await loadAll(); renderChecklist();
+
+  // Optimistic update — change state locally and re-render immediately
+  const item = state.checklist.find(i => i.ItemID === itemId);
+  if (item) item.Status = next;
+  renderChecklist();
+
+  // Sync to server in background
+  try {
+    await api('updateChecklistStatus', { ItemID: itemId, Status: next });
+    // Update IndexedDB cache silently
+    const list = await IDB.getAll('checklist');
+    const idx = list.findIndex(i => i.ItemID === itemId);
+    if (idx >= 0) { list[idx].Status = next; await IDB.setAll('checklist', list); }
+  } catch(e) {
+    // Revert on failure
+    if (item) item.Status = current;
+    renderChecklist();
+    toast('Failed to update — try again', 'error');
+  }
 }
 
 async function deleteChecklistItem(itemId) {
-  await api('deleteChecklistItem', { ItemID: itemId });
-  await loadAll(); renderChecklist();
+  // Optimistic remove
+  state.checklist = state.checklist.filter(i => i.ItemID !== itemId);
+  renderChecklist();
+  try {
+    await api('deleteChecklistItem', { ItemID: itemId });
+    const list = await IDB.getAll('checklist');
+    await IDB.setAll('checklist', list.filter(i => i.ItemID !== itemId));
+  } catch(e) {
+    toast('Failed to remove — try again', 'error');
+    await loadAll(); renderChecklist();
+  }
 }
 
 async function clearReceived() {
