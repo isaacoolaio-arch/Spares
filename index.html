@@ -1648,7 +1648,7 @@ async function callServer(action, data = {}) {
   // 60s timeout — GAS cold starts can take 15-20s
   const timer = setTimeout(() => controller.abort(), 60000);
 
-  const needsPost = action === 'savePartImage';
+  const needsPost = ['savePartImage','bulkSaveChecklist'].includes(action);
 
   try {
     let res;
