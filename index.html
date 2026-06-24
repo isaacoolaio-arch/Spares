@@ -7395,25 +7395,7 @@ function toast(msg, type = 'success') {
 }
 
 // Register Service Worker
-const EXPECTED_SW_CACHE = 'oola-spares-v20';
 if ('serviceWorker' in navigator) {
-  // Force-evict any stale SW by checking its cache name
-  (async () => {
-    try {
-      const keys = await caches.keys();
-      const hasCorrect = keys.includes(EXPECTED_SW_CACHE);
-      const hasStale   = keys.some(k => k.startsWith('oola-spares-') && k !== EXPECTED_SW_CACHE);
-      if (hasStale && !hasCorrect) {
-        console.log('[SW] Stale cache detected — unregistering all SWs and reloading');
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(r => r.unregister()));
-        await Promise.all(keys.map(k => caches.delete(k)));
-        window.location.reload();
-        return;
-      }
-    } catch(e) {}
-  })();
-
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', { scope: './' })
       .then(r => {
