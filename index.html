@@ -5486,40 +5486,34 @@ function renderChecklist() {
   };
 
   const statusColor = { 'Pending': 'var(--red)', 'Ordered': 'var(--blue)', 'Received': 'var(--green)' };
-  const nextLabel   = { 'Pending': 'Tap → Ordered', 'Ordered': 'Tap → Received', 'Received': 'Tap → reset' };
 
   const section = (title, list, status) => {
     if (list.length === 0) return '';
-    const bulkBtn = status === 'Pending' ? `
-      <button onclick="markAllOrdered()" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:var(--blue);border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">⟳ Mark all ordered</button>` : '';
-    return `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px">
-      <div class="section-label" style="margin:0">${title} <span style="color:var(--text3);font-weight:500;font-size:12px">(${list.length})</span></div>
-      ${bulkBtn}
-    </div>
-    ${list.map(i => {
+    const bulkBtn = status === 'Pending'
+      ? '<button onclick="markAllOrdered()" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:var(--blue);border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">⟳ Mark all ordered</button>'
+      : '';
+    let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px">'
+      + '<div class="section-label" style="margin:0">' + title + ' <span style="color:var(--text3);font-weight:500;font-size:12px">(' + list.length + ')</span></div>'
+      + bulkBtn + '</div>';
+    list.forEach(i => {
       const s = stockMap[i.PartID];
-      const stockBadge = s
-        ? s.qty <= 0
-          ? \`<span style="font-size:10px;font-weight:800;color:var(--red);background:rgba(255,80,80,.12);padding:2px 6px;border-radius:6px;margin-left:6px">OUT</span>\`
-          : s.qty <= s.reorder
-            ? \`<span style="font-size:10px;font-weight:800;color:var(--accent);background:rgba(240,165,0,.12);padding:2px 6px;border-radius:6px;margin-left:6px">LOW \${s.qty}</span>\`
-            : ''
-        : '';
-      return \`
-      <div class="check-item" id="ci-\${i.ItemID}">
-        <div class="check-box \${status === 'Ordered' ? 'ordered' : status === 'Received' ? 'checked' : ''}"
-             onclick="cycleCheckStatus('\${i.ItemID}', '\${i.Status}')"
-             title="\${nextLabel[status]}">
-          \${status === 'Received' ? '✓' : status === 'Ordered' ? '⟳' : ''}
-        </div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">\${i.PartName}\${stockBadge}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">Need: \${i.TargetQty} · \${i.Priority||'Normal'} · <span style="color:\${statusColor[status]}">\${status}</span></div>
-        </div>
-        <button onclick="deleteChecklistItem('\${i.ItemID}')" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0">×</button>
-      </div>\`;
-    }).join('')}`;
+      let stockBadge = '';
+      if (s) {
+        if (s.qty <= 0) stockBadge = '<span style="font-size:10px;font-weight:800;color:var(--red);background:rgba(255,80,80,.12);padding:2px 6px;border-radius:6px;margin-left:6px">OUT</span>';
+        else if (s.qty <= s.reorder) stockBadge = '<span style="font-size:10px;font-weight:800;color:var(--accent);background:rgba(240,165,0,.12);padding:2px 6px;border-radius:6px;margin-left:6px">LOW ' + s.qty + '</span>';
+      }
+      const boxClass = status === 'Ordered' ? 'check-box ordered' : status === 'Received' ? 'check-box checked' : 'check-box';
+      const boxIcon  = status === 'Received' ? '✓' : status === 'Ordered' ? '⟳' : '';
+      html += '<div class="check-item" id="ci-' + i.ItemID + '">'
+        + '<div class="' + boxClass + '" onclick="cycleCheckStatus(\'" + i.ItemID + "\',\'" + i.Status + "\')">' + boxIcon + '</div>'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + i.PartName + stockBadge + '</div>'
+        + '<div style="font-size:11px;color:var(--text3);margin-top:2px">Need: ' + i.TargetQty + ' · ' + (i.Priority||'Normal') + ' · <span style="color:' + statusColor[status] + '">' + status + '</span></div>'
+        + '</div>'
+        + '<button onclick="deleteChecklistItem(\'" + i.ItemID + "\')" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0">×</button>'
+        + '</div>';
+    });
+    return html;
   };
 
   const summary = `
