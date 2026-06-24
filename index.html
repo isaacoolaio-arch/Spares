@@ -2362,10 +2362,10 @@ async function loadAll() {
         const na = (a.ItemName||a.Name||'').toLowerCase();
         const nb = (b.ItemName||b.Name||'').toLowerCase();
         if (na !== nb) return na.localeCompare(nb);
-        const sa2 = (a.Size||'').toLowerCase();
-        const sb2 = (b.Size||'').toLowerCase();
+        const sa2 = String(a.Size||'').toLowerCase();
+        const sb2 = String(b.Size||'').toLowerCase();
         if (sa2 !== sb2) return sa2.localeCompare(sb2);
-        return (a.Brand||a.PartNo||'').toLowerCase().localeCompare((b.Brand||b.PartNo||'').toLowerCase());
+        return String(a.Brand||a.PartNo||'').toLowerCase().localeCompare(String(b.Brand||b.PartNo||'').toLowerCase());
       });
 
       state.parts         = rawParts;
@@ -4231,10 +4231,10 @@ function filterParts() {
     const na = (a.ItemName||a.Name||'').toLowerCase();
     const nb = (b.ItemName||b.Name||'').toLowerCase();
     if (na !== nb) return na.localeCompare(nb);
-    const sa = (a.Size||'').toLowerCase();
-    const sb = (b.Size||'').toLowerCase();
+    const sa = String(a.Size||'').toLowerCase();
+    const sb = String(b.Size||'').toLowerCase();
     if (sa !== sb) return sa.localeCompare(sb);
-    return (a.Brand||a.PartNo||'').toLowerCase().localeCompare((b.Brand||b.PartNo||'').toLowerCase());
+    return String(a.Brand||a.PartNo||'').toLowerCase().localeCompare(String(b.Brand||b.PartNo||'').toLowerCase());
   });
   if (parts.length === 0) {
     const q = (document.getElementById('parts-search')?.value || '').trim();
@@ -7573,7 +7573,7 @@ function renderStockListContent() {
     return catMatch && moveMatch && statusMatch && searchMatch;
   });
 
-  if (stockSort==='name') filtered.sort((a,b)=>{ const na=(a.ItemName||a.Name||'').toLowerCase(),nb=(b.ItemName||b.Name||'').toLowerCase(); if(na!==nb)return na.localeCompare(nb); return (a.Size||'').localeCompare(b.Size||''); });
+  if (stockSort==='name') filtered.sort((a,b)=>{ const na=(a.ItemName||a.Name||'').toLowerCase(),nb=(b.ItemName||b.Name||'').toLowerCase(); if(na!==nb)return na.localeCompare(nb); return String(a.Size||'').localeCompare(String(b.Size||'')); });
   if (stockSort==='qty')   filtered.sort((a,b)=>(parseInt(b.StockQty)||0)-(parseInt(a.StockQty)||0));
   if (stockSort==='value') filtered.sort((a,b)=>((parseFloat(b.CostPrice)||0)*(parseInt(b.StockQty)||0))-((parseFloat(a.CostPrice)||0)*(parseInt(a.StockQty)||0)));
   if (stockSort==='cat')   filtered.sort((a,b)=>(a.Category||'').localeCompare(b.Category||''));
