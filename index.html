@@ -9410,14 +9410,17 @@ function renderPurchasesListFiltered(q) {
 }
 
 function renderChecklistFiltered(q) {
+  // If no search query, delegate to full renderChecklist (which shows ⚡ Auto-add button)
+  if (!q) { renderChecklist(); return; }
+
   let items = state.checklist;
-  if (q) items = items.filter(c =>
+  items = items.filter(c =>
     smartMatch(c.PartName + ' ' + (c.Status||'') + ' ' + (c.Priority||''), q)
   );
 
   if (items.length === 0) {
     document.getElementById('tx-content').innerHTML =
-      `<div class="empty-state"><div class="empty-icon">✅</div><p>${q?'No items match "'+q+'"':'Checklist is empty.'}</p></div>`;
+      `<div class="empty-state"><div class="empty-icon">✅</div><p>No items match "${q}"</p></div>`;
     return;
   }
 
