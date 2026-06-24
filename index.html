@@ -491,24 +491,7 @@
       <span style="margin-left:auto;font-size:11px;color:var(--accent);font-weight:700;
         background:rgba(240,165,0,.12);padding:2px 8px;border-radius:20px">ADMIN</span>
     </button>
-    <button id="user-btn-user1" onclick="selectLoginUser('user1')" style="
-      width:100%;padding:14px 20px;border-radius:14px;border:1px solid var(--border);
-      background:var(--surface2);color:var(--text);font-family:var(--font);
-      font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:12px;
-      transition:all .2s
-    ">
-      <span style="font-size:22px">👤</span>
-      <span id="uname-user1">User 1</span>
-    </button>
-    <button id="user-btn-user2" onclick="selectLoginUser('user2')" style="
-      width:100%;padding:14px 20px;border-radius:14px;border:1px solid var(--border);
-      background:var(--surface2);color:var(--text);font-family:var(--font);
-      font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:12px;
-      transition:all .2s
-    ">
-      <span style="font-size:22px">👤</span>
-      <span id="uname-user2">User 2</span>
-    </button>
+    <div id="login-staff-users" style="display:contents"></div>
   </div>
 
   <!-- Step 2: PIN entry (shown after user selected) -->
@@ -1583,9 +1566,13 @@ async function serveFromCache(action, data) {
     // Each user checks their own PIN offline (same logic as backend)
     if (data.role) {
       let storedPin;
-      if (data.role === 'admin')  storedPin = get('pin', '1234');
-      if (data.role === 'user1')  storedPin = get('user1Pin', '');
-      if (data.role === 'user2')  storedPin = get('user2Pin', '');
+      if (data.role === 'admin') {
+        storedPin = get('pin', '1234');
+      } else {
+        const i = data.role.replace('user','');
+        const key = i === '1' ? 'user1Pin' : 'user' + i + 'Pin';
+        storedPin = get(key, '');
+      }
       if (!storedPin) return { success: false, error: 'No PIN set for this user.' };
       if (incoming === storedPin) return { success: true, role: data.role };
       return { success: false, error: 'Wrong PIN. Try again.' };
@@ -2144,25 +2131,37 @@ let pinInput = '';
 let loginRole = null; // which user is logging in
 
 // Load user names from settings into the login screen buttons
+const MAX_USERS = 5;
+
 function refreshLoginUserNames() {
   const s = state.settings;
-  const adminName = s.adminName || 'Admin';
-  const u1Name    = s.user1Name || 'User 1';
-  const u2Name    = s.user2Name || 'User 2';
-  const el = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
-  el('uname-admin', adminName);
-  el('uname-user1', u1Name);
-  el('uname-user2', u2Name);
-  // Dim users with no PIN set
-  const dim = (id, hasPin) => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    btn.style.opacity = hasPin ? '1' : '0.4';
+  const el = document.getElementById('uname-admin');
+  if (el) el.textContent = s.adminName || 'Admin';
+
+  // Rebuild staff user buttons dynamically
+  const container = document.getElementById('login-staff-users');
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (let i = 1; i <= MAX_USERS; i++) {
+    const nameKey = i === 1 ? 'user1Name' : 'user' + i + 'Name';
+    const pinKey  = i === 1 ? 'user1Pin'  : 'user' + i + 'Pin';
+    const role    = 'user' + i;
+    const name    = s[nameKey] || '';
+    const hasPin  = !!(s[pinKey]);
+    // Only show users that have a name OR a PIN set
+    if (!name && !hasPin) continue;
+    const displayName = name || ('User ' + i);
+    const btn = document.createElement('button');
+    btn.id = 'user-btn-' + role;
+    btn.onclick = () => selectLoginUser(role);
     btn.disabled = !hasPin;
-  };
-  dim('user-btn-admin', true); // admin always enabled
-  dim('user-btn-user1', !!(s.user1Pin));
-  dim('user-btn-user2', !!(s.user2Pin));
+    btn.style.cssText = 'width:100%;padding:14px 20px;border-radius:14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all .2s;opacity:' + (hasPin ? '1' : '0.4');
+    btn.innerHTML = '<span style="font-size:22px">👤</span>'
+      + '<span>' + displayName + '</span>'
+      + (!hasPin ? '<span style="margin-left:auto;font-size:10px;color:var(--text3)">No PIN</span>' : '');
+    container.appendChild(btn);
+  }
 }
 
 function selectLoginUser(role) {
@@ -2171,8 +2170,13 @@ function selectLoginUser(role) {
   updatePinDots();
   document.getElementById('pin-error').textContent = '';
   const s = state.settings;
-  const names = { admin: s.adminName||'Admin', user1: s.user1Name||'User 1', user2: s.user2Name||'User 2' };
-  document.getElementById('login-username-label').textContent = names[role];
+  let displayName = s.adminName || 'Admin';
+  if (role !== 'admin') {
+    const i = role.replace('user','');
+    const nameKey = i === '1' ? 'user1Name' : 'user' + i + 'Name';
+    displayName = s[nameKey] || ('User ' + i);
+  }
+  document.getElementById('login-username-label').textContent = displayName;
   document.getElementById('login-step-users').style.display = 'none';
   document.getElementById('login-step-pin').style.display = 'flex';
 }
@@ -7289,41 +7293,30 @@ function showSettings() {
     <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:16px">
       <div class="card-title" style="margin-bottom:14px">👥 User Management</div>
 
-      <!-- User 1 -->
-      <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <span style="font-size:18px">👤</span>
-          <span style="font-size:13px;font-weight:700;color:var(--text)">User 1</span>
-          <span style="margin-left:auto;font-size:11px;color:${s.user1Pin ? 'var(--green)' : 'var(--red)'};
-            background:${s.user1Pin ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)'};
-            padding:2px 8px;border-radius:20px;font-weight:700">
-            ${s.user1Pin ? '● Active' : '○ No PIN set'}
-          </span>
-        </div>
-        <label>Display Name</label>
-        <input id="cfg-u1name" value="${s.user1Name || ''}" placeholder="e.g. John" style="margin-bottom:8px" />
-        <label>PIN <span style="font-size:11px;color:var(--text3);font-weight:400">(4 digits · blank = disable login)</span></label>
-        <input id="cfg-u1pin" type="text" inputmode="numeric" maxlength="4" placeholder="${s.user1Pin ? '••••  (set)' : 'Not set'}" style="-webkit-text-security:disc;text-security:disc" autocomplete="new-password" />
-      </div>
-
-      <!-- User 2 -->
-      <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:14px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <span style="font-size:18px">👤</span>
-          <span style="font-size:13px;font-weight:700;color:var(--text)">User 2</span>
-          <span style="margin-left:auto;font-size:11px;color:${s.user2Pin ? 'var(--green)' : 'var(--red)'};
-            background:${s.user2Pin ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)'};
-            padding:2px 8px;border-radius:20px;font-weight:700">
-            ${s.user2Pin ? '● Active' : '○ No PIN set'}
-          </span>
-        </div>
-        <label>Display Name</label>
-        <input id="cfg-u2name" value="${s.user2Name || ''}" placeholder="e.g. Mary" style="margin-bottom:8px" />
-        <label>PIN <span style="font-size:11px;color:var(--text3);font-weight:400">(4 digits · blank = disable login)</span></label>
-        <input id="cfg-u2pin" type="text" inputmode="numeric" maxlength="4" placeholder="${s.user2Pin ? '••••  (set)' : 'Not set'}" style="-webkit-text-security:disc;text-security:disc" autocomplete="new-password" />
-      </div>
-
-      <button class="btn btn-primary" onclick="saveAllSettings()">💾 Save All</button>
+      ${(() => {
+        let html = '';
+        const lastActive = [1,2,3,4,5].filter(j => s['user'+j+'Name'] || s['user'+j+'Pin']).pop() || 0;
+        for (let i = 1; i <= Math.min(lastActive+1, 5); i++) {
+          const nameKey = 'user' + i + 'Name';
+          const pinKey  = 'user' + i + 'Pin';
+          const name    = s[nameKey] || '';
+          const hasPin  = !!(s[pinKey]);
+          const displayName = name || ('User ' + i);
+          html += '<div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:10px">'
+            + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+            + '<span style="font-size:18px">👤</span>'
+            + '<span style="font-size:13px;font-weight:700;color:var(--text)">' + displayName + '</span>'
+            + '<span style="margin-left:auto;font-size:11px;color:' + (hasPin?'var(--green)':'var(--red)') + ';background:' + (hasPin?'rgba(34,197,94,.12)':'rgba(239,68,68,.12)') + ';padding:2px 8px;border-radius:20px;font-weight:700">'
+            + (hasPin ? '● Active' : '○ No PIN') + '</span></div>'
+            + '<label>Name</label>'
+            + '<input id="cfg-u' + i + 'name" value="' + name.replace(/"/g,'&quot;') + '" placeholder="e.g. Kennedy" style="margin-bottom:8px" />'
+            + '<label>PIN <span style="font-size:11px;color:var(--text3);font-weight:400">(4 digits · blank = disable)</span></label>'
+            + '<input id="cfg-u' + i + 'pin" type="text" inputmode="numeric" maxlength="4" placeholder="' + (hasPin ? '••••  (set)' : 'Not set') + '" style="-webkit-text-security:disc;text-security:disc" autocomplete="new-password" />'
+            + '</div>';
+        }
+        return html;
+      })()}
+            <button class="btn btn-primary" onclick="saveAllSettings()">💾 Save All</button>
     </div>
 
     <!-- DATA TOOLS — admin only -->
@@ -7421,15 +7414,18 @@ async function saveAllSettings() {
     ownerName:  val('cfg-owner'),
     phone:      val('cfg-phone'),
     adminEmail: val('cfg-email'),
-    user1Name:  val('cfg-u1name'),
-    user2Name:  val('cfg-u2name'),
   };
   const adminPin = val('cfg-pin');
-  const u1pin    = val('cfg-u1pin');
-  const u2pin    = val('cfg-u2pin');
-  if (adminPin) data.pin      = adminPin;
-  if (u1pin)    data.user1Pin = u1pin;
-  if (u2pin)    data.user2Pin = u2pin;
+  if (adminPin) data.pin = adminPin;
+  // Handle up to 5 staff users
+  for (let i = 1; i <= 5; i++) {
+    const nameEl = document.getElementById('cfg-u' + i + 'name');
+    const pinEl  = document.getElementById('cfg-u' + i + 'pin');
+    const nameKey = 'user' + i + 'Name';
+    const pinKey  = 'user' + i + 'Pin';
+    if (nameEl) data[nameKey] = nameEl.value.trim();
+    if (pinEl && pinEl.value.trim()) data[pinKey] = pinEl.value.trim();
+  }
 
   const btn = document.querySelector('#modal-body .btn-primary');
   if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }

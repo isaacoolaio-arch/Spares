@@ -192,12 +192,17 @@ function verifyPin(data) {
   const settings = getSettingsMap();
   const incoming = String(data.pin || '').trim();
 
-  // Check all three users
+  // Support up to 5 staff users
   const users = [
-    { role: 'admin',  name: settings.adminName  || 'Admin',  pin: String(settings.pin      || '1234').trim() },
-    { role: 'user1',  name: settings.user1Name  || 'User 1', pin: String(settings.user1Pin  || '').trim() },
-    { role: 'user2',  name: settings.user2Name  || 'User 2', pin: String(settings.user2Pin  || '').trim() },
+    { role: 'admin', name: settings.adminName || 'Admin', pin: String(settings.pin || '1234').trim() },
   ];
+  for (var i = 1; i <= 5; i++) {
+    var nameKey = 'user' + i + 'Name';
+    var pinKey  = 'user' + i + 'Pin';
+    var uName   = settings[nameKey] || ('User ' + i);
+    var uPin    = String(settings[pinKey] || '').trim();
+    users.push({ role: 'user' + i, name: uName, pin: uPin });
+  }
 
   // If a specific role is requested (login screen), only match that role
   if (data.role) {
