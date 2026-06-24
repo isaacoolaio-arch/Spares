@@ -682,8 +682,7 @@ function getCoreData() {
       StockQty: p.StockQty||0, ReorderLevel: p.ReorderLevel||5,
       Unit: p.Unit||'Piece', Movement: p.Movement||'Medium',
       SupplierName: p.SupplierName||'', Barcode: String(p.Barcode||''),
-      ImageUrl: String(p.ImageUrl||''),
-      CreatedAt: String(p.CreatedAt||'')
+      ImageUrl: String(p.ImageUrl||'')
     })),
     suppliers: suppliers.map(s => ({ SupplierID: String(s.SupplierID||''), Name: s.Name||'', Phone: s.Phone||'', Location: s.Location||'', Email: s.Email||'', Notes: s.Notes||'' })),
     supplierRates: supplierRates.map(r => ({ RateID: String(r.RateID||''), SupplierID: String(r.SupplierID||''), SupplierName: r.SupplierName||'', PartID: String(r.PartID||''), PartName: r.PartName||'', UnitPrice: r.UnitPrice||0 })),
