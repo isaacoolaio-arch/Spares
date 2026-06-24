@@ -3552,10 +3552,10 @@ function showEditPartModal(partId) {
       </div>
       <div>
         <label>Size / Spec</label>
-        <input id="e-size" value="${(p.Size||p.Description||''). replace(/"/g,'&quot;')}" placeholder="e.g. Standard, +1..." oninput="this.value=toTitleCase(this.value)" list="e-size-opts" autocomplete="off" />
+        <input id="e-size" value="${String(p.Size||p.Description||''). replace(/"/g,'&quot;')}" placeholder="e.g. Standard, +1..." oninput="this.value=toTitleCase(this.value)" list="e-size-opts" autocomplete="off" />
         <datalist id="e-size-opts">
           <option value="Standard"><option value="+1"><option value="+2"><option value="+25"><option value="+50"><option value="Short"><option value="Long"><option value="Front"><option value="Rear"><option value="Left"><option value="Right"><option value="Small"><option value="Medium"><option value="Large"><option value="Inner"><option value="Outer">
-          ${[...new Set(state.parts.map(q=>(q.Size||'').trim()).filter(Boolean))].filter(s=>{const sl=s.toLowerCase();return!['standard','+1','+2','+25','+50','short','long','front','rear','left','right','small','medium','large','inner','outer'].includes(sl);}).sort().map(s=>`<option value="${s}">`).join('')}
+          ${[...new Set(state.parts.map(q=>String(q.Size||'').trim()).filter(Boolean))].filter(s=>{const sl=s.toLowerCase();return!['standard','+1','+2','+25','+50','short','long','front','rear','left','right','small','medium','large','inner','outer'].includes(sl);}).sort().map(s=>`<option value="${s}">`).join('')}
         </datalist>
       </div>
     </div>
