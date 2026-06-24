@@ -5441,54 +5441,112 @@ function renderChecklist() {
       </div>`;
     return;
   }
-  const pending  = items.filter(i => i.Status === 'Pending');
-  const ordered  = items.filter(i => i.Status === 'Ordered');
-  const received = items.filter(i => i.Status === 'Received');
+  // Build a lookup: PartID → current stock info
+  const stockMap = {};
+  state.parts.forEach(p => {
+    stockMap[p.PartID] = { qty: parseInt(p.StockQty)||0, reorder: parseInt(p.ReorderLevel)||5 };
+  });
+
+  // Active filter state (persisted on window to survive re-renders)
+  if (!window._clFilter) window._clFilter = 'all';
+  const activeFilter = window._clFilter;
+
+  // Apply stock filter to items
+  const applyStockFilter = (list) => {
+    if (activeFilter === 'out')  return list.filter(i => { const s = stockMap[i.PartID]; return s && s.qty <= 0; });
+    if (activeFilter === 'low')  return list.filter(i => { const s = stockMap[i.PartID]; return s && s.qty > 0 && s.qty <= s.reorder; });
+    return list;
+  };
+
+  const allPending  = items.filter(i => i.Status === 'Pending');
+  const allOrdered  = items.filter(i => i.Status === 'Ordered');
+  const allReceived = items.filter(i => i.Status === 'Received');
+
+  const pending  = applyStockFilter(allPending);
+  const ordered  = applyStockFilter(allOrdered);
+  const received = applyStockFilter(allReceived);
+
+  // Count out-of-stock and low-stock across all pending items
+  const outCount = allPending.filter(i => { const s = stockMap[i.PartID]; return s && s.qty <= 0; }).length;
+  const lowCount = allPending.filter(i => { const s = stockMap[i.PartID]; return s && s.qty > 0 && s.qty <= s.reorder; }).length;
+
+  const filterPill = (key, label, count, color) => {
+    const active = activeFilter === key;
+    return `<button onclick="setChecklistFilter('${key}')" style="
+      padding:5px 11px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;
+      font-family:var(--font);border:1px solid ${active ? color : 'var(--border)'};
+      background:${active ? color+'22' : 'var(--surface2)'};
+      color:${active ? color : 'var(--text2)'}">
+      ${label}${count !== null ? ` <span style="font-size:11px;opacity:.8">${count}</span>` : ''}
+    </button>`;
+  };
 
   const section = (title, list, status) => list.length === 0 ? '' : `
     <div class="section-label">${title}</div>
-    ${list.map(i => `
+    ${list.map(i => {
+      const s = stockMap[i.PartID];
+      const stockBadge = s
+        ? s.qty <= 0
+          ? `<span style="font-size:10px;font-weight:800;color:var(--red);background:rgba(255,80,80,.12);padding:2px 6px;border-radius:6px;margin-left:6px">OUT</span>`
+          : s.qty <= s.reorder
+            ? `<span style="font-size:10px;font-weight:800;color:var(--accent);background:rgba(240,165,0,.12);padding:2px 6px;border-radius:6px;margin-left:6px">LOW ${s.qty}</span>`
+            : ''
+        : '';
+      return `
       <div class="check-item">
         <div class="check-box ${status === 'Ordered' ? 'ordered' : status === 'Received' ? 'checked' : ''}"
              onclick="cycleCheckStatus('${i.ItemID}', '${i.Status}')">
           ${status === 'Received' ? '✓' : status === 'Ordered' ? '⟳' : ''}
         </div>
         <div style="flex:1">
-          <div style="font-size:15px;font-weight:700">${i.PartName}</div>
+          <div style="font-size:15px;font-weight:700">${i.PartName}${stockBadge}</div>
           <div style="font-size:12px;color:var(--text2)">Need: ${i.TargetQty} · ${i.Priority||'Normal'}</div>
         </div>
         <button onclick="deleteChecklistItem('${i.ItemID}')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">×</button>
-      </div>`).join('')}`;
+      </div>`;
+    }).join('')}`;
 
-  // Summary bar at top
   const summary = `
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
       <div class="stat-card" style="text-align:center;padding:10px">
-        <div style="font-size:18px;font-weight:900;color:var(--red)">${pending.length}</div>
+        <div style="font-size:18px;font-weight:900;color:var(--red)">${allPending.length}</div>
         <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">To Order</div>
       </div>
       <div class="stat-card" style="text-align:center;padding:10px">
-        <div style="font-size:18px;font-weight:900;color:var(--blue)">${ordered.length}</div>
+        <div style="font-size:18px;font-weight:900;color:var(--blue)">${allOrdered.length}</div>
         <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Ordered</div>
       </div>
       <div class="stat-card" style="text-align:center;padding:10px">
-        <div style="font-size:18px;font-weight:900;color:var(--green)">${received.length}</div>
+        <div style="font-size:18px;font-weight:900;color:var(--green)">${allReceived.length}</div>
         <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Received</div>
       </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      ${filterPill('all',  'All',           null,     'var(--text2)')}
+      ${filterPill('out',  '🔴 Out of stock', outCount, 'var(--red)')}
+      ${filterPill('low',  '🟡 Low stock',    lowCount, 'var(--accent)')}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:11px;color:var(--text3)">Tap circle: 📌 Pending → ⟳ Ordered → ✓ Received</div>
       <div style="display:flex;gap:6px">
-        ${received.length > 0 ? `<button onclick="clearReceived()" style="background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:var(--green);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">🗑 Clear ${received.length} received</button>` : ''}
+        ${allReceived.length > 0 ? `<button onclick="clearReceived()" style="background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:var(--green);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">🗑 Clear ${allReceived.length} received</button>` : ''}
         <button onclick="clearAllChecklist()" style="background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.25);color:var(--red);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✕ Clear all</button>
       </div>
     </div>`;
 
+  const emptyFilter = (pending.length + ordered.length + received.length) === 0
+    ? `<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">No ${activeFilter === 'out' ? 'out of stock' : 'low stock'} items in checklist</div>` : '';
+
   document.getElementById('tx-content').innerHTML =
-    summary +
+    summary + emptyFilter +
     section('📌 To Order', pending, 'Pending') +
     section('⟳ Ordered', ordered, 'Ordered') +
     section('✓ Received', received, 'Received');
+}
+
+function setChecklistFilter(f) {
+  window._clFilter = f;
+  renderChecklist();
 }
 
 async function cycleCheckStatus(itemId, current) {
