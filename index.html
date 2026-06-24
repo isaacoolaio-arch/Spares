@@ -6269,32 +6269,34 @@ async function autoAddLowStock() {
   const lowParts = state.parts.filter(p => {
     const qty = parseInt(p.StockQty)||0;
     const reorder = parseInt(p.ReorderLevel)||5;
-    // Skip parts already on checklist
     const alreadyAdded = state.checklist.some(c => c.PartID === p.PartID);
     return qty <= reorder && !alreadyAdded;
   });
   if (lowParts.length === 0) { toast('All low stock parts already on checklist', 'success'); return; }
+
   toast(`Adding ${lowParts.length} parts...`, 'success');
-  let added = 0;
-  for (const p of lowParts) {
-    try {
-      const reorder = parseInt(p.ReorderLevel)||5;
-      const qty = parseInt(p.StockQty)||0;
-      const needed = reorder; // order up to reorder level qty
-      const res = await api('saveChecklistItem', {
-        PartID: p.PartID,
-        PartName: p.Name || p.ItemName,
-        TargetQty: needed,
-        Priority: qty <= 0 ? 'High' : 'Normal',
-        Status: 'Pending',
-        Notes: qty <= 0 ? 'Out of stock' : `Low stock (${qty} left)`
-      });
-      if (res.success) added++;
-    } catch(e) {}
+
+  const items = lowParts.map(p => {
+    const qty = parseInt(p.StockQty)||0;
+    const reorder = parseInt(p.ReorderLevel)||5;
+    return {
+      PartID: p.PartID,
+      PartName: p.Name || p.ItemName,
+      TargetQty: reorder,
+      Priority: qty <= 0 ? 'High' : 'Normal',
+      Status: 'Pending',
+      Notes: qty <= 0 ? 'Out of stock' : `Low stock (${qty} left)`
+    };
+  });
+
+  try {
+    const res = await api('bulkSaveChecklist', { items });
+    await loadAll();
+    renderChecklist();
+    toast(`✓ ${res.added || items.length} parts added to checklist`, 'success');
+  } catch(e) {
+    toast('Failed to add parts — check connection', 'error');
   }
-  await loadAll();
-  renderChecklist();
-  toast(`✓ ${added} parts added to checklist`, 'success');
 }
 
 async function saveChecklistItem() {

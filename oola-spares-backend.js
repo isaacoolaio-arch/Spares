@@ -92,7 +92,8 @@ function handleRequest(e) {
 
       // CHECKLIST
       case 'getChecklist': result = getChecklist(); break;
-      case 'saveChecklistItem': result = saveChecklistItem(data); break;
+      case 'saveChecklistItem':    result = saveChecklistItem(data); break;
+      case 'bulkSaveChecklist':    result = bulkSaveChecklist(data); break;
       case 'updateChecklistStatus': result = updateChecklistStatus(data); break;
       case 'deleteChecklistItem': result = deleteChecklistItem(data); break;
       case 'clearAllChecklist':    result = clearAllChecklist(); break;
@@ -1505,6 +1506,39 @@ function saveChecklistItem(data) {
     data.Notes || '', now
   ]);
   return { success: true, id: id };
+}
+
+function bulkSaveChecklist(data) {
+  // data.items = array of {PartID, PartName, TargetQty, Priority, Status, Notes}
+  // data.skipExisting = true — skip PartIDs already in checklist
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEETS.CHECKLIST);
+  const now = formatDate(new Date());
+
+  // Get existing PartIDs to skip duplicates
+  const existing = new Set();
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][1]) existing.add(String(rows[i][1]));
+  }
+
+  const items = (data.items || []).filter(item => !existing.has(String(item.PartID)));
+  if (items.length === 0) return { success: true, added: 0 };
+
+  const newRows = items.map(item => [
+    'CHK-' + Date.now() + '-' + Math.random().toString(36).substr(2,5),
+    item.PartID, item.PartName,
+    parseInt(item.TargetQty) || 1,
+    item.Status || 'Pending',
+    item.Priority || 'Normal',
+    item.Notes || '', now
+  ]);
+
+  // Write all rows at once
+  const startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, newRows.length, 8).setValues(newRows);
+
+  return { success: true, added: newRows.length };
 }
 
 function updateChecklistStatus(data) {
