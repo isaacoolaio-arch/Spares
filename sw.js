@@ -1,4 +1,4 @@
-const CACHE = 'oola-spares-v15';
+const CACHE = 'oola-spares-v16';
 
 self.addEventListener('message', e => {
   if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();

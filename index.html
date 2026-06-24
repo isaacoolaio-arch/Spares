@@ -1644,33 +1644,26 @@ async function applyLocalWrite(action, data) {
 async function callServer(action, data = {}) {
   if (LOCAL_MODE) return localApi(action, data);
 
-  // Manual timeout using AbortController (iOS 15 doesn't support AbortSignal.timeout)
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000); // 30s — image uploads need more time
+  // 60s timeout — GAS cold starts can take 15-20s
+  const timer = setTimeout(() => controller.abort(), 60000);
 
-  // Actions with large payloads (images) must use POST — GET URLs have an ~8KB limit
   const needsPost = action === 'savePartImage';
 
   try {
     let res;
     if (needsPost) {
       res = await fetch(API_URL, {
-        method: 'POST',
-        mode: 'cors',
-        credentials: 'omit',
-        redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight
+        method: 'POST', mode: 'cors', credentials: 'omit', redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action, ...data }),
         signal: controller.signal
       });
     } else {
       const params = new URLSearchParams({ action, ...data });
       res = await fetch(API_URL + '?' + params, {
-        method: 'GET',
-        mode: 'cors',                  // explicit CORS — required for iOS standalone PWA
-        credentials: 'omit',           // no cookies — avoids preflight issues
-        redirect: 'follow',            // follow Apps Script redirect (script.google.com → googleusercontent.com)
-        signal: controller.signal
+        method: 'GET', mode: 'cors', credentials: 'omit',
+        redirect: 'follow', signal: controller.signal
       });
     }
     clearTimeout(timer);
@@ -1678,7 +1671,7 @@ async function callServer(action, data = {}) {
     return await res.json();
   } catch(e) {
     clearTimeout(timer);
-    if (e.name === 'AbortError') throw new Error('Request timed out — check your internet connection');
+    if (e.name === 'AbortError') throw new Error('Request timed out after 60s');
     throw e;
   }
 }
@@ -2351,6 +2344,10 @@ async function loadAll() {
 
   // Step 2 — Sync from server in background (silent, no banners)
   if (!isOnline) return;
+
+  // Show syncing indicator
+  const syncIndicator = document.getElementById('sync-status');
+  if (syncIndicator) syncIndicator.textContent = '⟳ Syncing...';
 
   const syncFromServer = async (attempt) => {
     try {
