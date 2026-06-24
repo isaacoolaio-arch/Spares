@@ -2354,28 +2354,11 @@ async function loadAll() {
 
   const syncFromServer = async (attempt) => {
     try {
-      // Try new split API first with short timeout, fall back to legacy getAll
-      let core, tx;
-      try {
-        const corePromise = api('getCoreData');
-        const txPromise   = api('getTransactions');
-        // Short 8s timeout for new API — if old backend, fails fast and falls to getAll
-        const timeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('timeout')), 8000)
-        );
-        [core, tx] = await Promise.all([
-          Promise.race([corePromise, timeout]),
-          Promise.race([txPromise,   timeout])
-        ]);
-        if (!core.success || !tx.success) throw new Error('Bad response');
-      } catch(splitErr) {
-        // Fallback to legacy getAll (old backend without getCoreData)
-        console.log('New API unavailable, falling back to getAll...');
-        const res = await api('getAll');
-        if (!res.success) throw new Error(res.error || 'getAll failed');
-        core = { ...res, success: true };
-        tx   = { sales: res.sales || [], purchases: res.purchases || [], success: true };
-      }
+      // Use getAll directly — works with current deployed backend
+      const res = await api('getAll');
+      if (!res.success) throw new Error(res.error || 'getAll failed');
+      const core = { ...res, success: true };
+      const tx   = { sales: res.sales || [], purchases: res.purchases || [], success: true };
 
       const rawParts = core.parts || [];
       rawParts.sort((a, b) => {
