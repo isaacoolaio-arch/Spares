@@ -1577,9 +1577,23 @@ async function serveFromCache(action, data) {
   }
   if (action === 'verifyPin') {
     const items = await IDB.getAll('settings');
-    const pinItem = items.find(i => i.key === 'pin');
-    const pin = pinItem ? String(pinItem.value) : '1234';
-    return { success: String(data.pin) === pin };
+    const get = (key, def) => { const it = items.find(i => i.key === key); return it ? String(it.value||'').trim() : def; };
+    const incoming = String(data.pin || '').trim();
+
+    // Each user checks their own PIN offline (same logic as backend)
+    if (data.role) {
+      let storedPin;
+      if (data.role === 'admin')  storedPin = get('pin', '1234');
+      if (data.role === 'user1')  storedPin = get('user1Pin', '');
+      if (data.role === 'user2')  storedPin = get('user2Pin', '');
+      if (!storedPin) return { success: false, error: 'No PIN set for this user.' };
+      if (incoming === storedPin) return { success: true, role: data.role };
+      return { success: false, error: 'Wrong PIN. Try again.' };
+    }
+
+    // Generic verify (OTP admin check) — use admin PIN
+    const adminPin = get('pin', '1234');
+    return { success: incoming === adminPin };
   }
   return { success: false, error: 'Offline and no cache available' };
 }
@@ -2397,6 +2411,12 @@ async function loadAll() {
       };
       for (const [store, data] of Object.entries(IDBmap)) {
         try { await IDB.setAll(store, data); } catch(e) {}
+      }
+      // Cache all settings (including per-user PINs) into IDB key-value store
+      if (state.settings && typeof state.settings === 'object') {
+        for (const [key, value] of Object.entries(state.settings)) {
+          try { await IDB.set(key, value); } catch(e) {}
+        }
       }
 
       console.log('loadAll synced:', {
