@@ -1690,7 +1690,7 @@ async function autoSync() {
   // Filter out read-only actions that should never be in the queue
   const writeActions = ['savePart','deletePart','saveSupplier','deleteSupplier',
     'saveSale','updateSale','deleteSale','savePurchase','updatePurchase','deletePurchase',
-    'saveChecklistItem','updateChecklistStatus','deleteChecklistItem',
+    'saveChecklistItem','updateChecklistStatus','deleteChecklistItem','clearAllChecklist',
     'saveSupplierRate','deleteSupplierRate','saveSettings',
     'sendOtpNotification','markNotificationRead','requestEditOtp'];
 
@@ -5518,9 +5518,9 @@ async function clearReceived() {
 async function clearAllChecklist() {
   if (!confirm(`Remove all ${state.checklist.length} items from checklist?`)) return;
   toast('Clearing...', 'success');
-  for (const i of state.checklist) {
-    try { await api('deleteChecklistItem', { ItemID: i.ItemID }); } catch(e) {}
-  }
+  try {
+    await api('clearAllChecklist', {});
+  } catch(e) {}
   await loadAll();
   renderChecklist();
   toast('✓ Checklist cleared', 'success');

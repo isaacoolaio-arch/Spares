@@ -95,6 +95,7 @@ function handleRequest(e) {
       case 'saveChecklistItem': result = saveChecklistItem(data); break;
       case 'updateChecklistStatus': result = updateChecklistStatus(data); break;
       case 'deleteChecklistItem': result = deleteChecklistItem(data); break;
+      case 'clearAllChecklist':    result = clearAllChecklist(); break;
 
       // DASHBOARD
       case 'getDashboard': result = getDashboard(); break;
@@ -1532,6 +1533,16 @@ function deleteChecklistItem(data) {
     }
   }
   return { success: false, error: 'Item not found' };
+}
+
+function clearAllChecklist() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEETS.CHECKLIST);
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.deleteRows(2, lastRow - 1);
+  }
+  return { success: true };
 }
 
 // ============================================================
