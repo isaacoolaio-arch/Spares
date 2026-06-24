@@ -2354,11 +2354,11 @@ async function loadAll() {
 
   const syncFromServer = async (attempt) => {
     try {
-      // Use getAll directly — works with current deployed backend
-      const res = await api('getAll');
-      if (!res.success) throw new Error(res.error || 'getAll failed');
-      const core = { ...res, success: true };
-      const tx   = { sales: res.sales || [], purchases: res.purchases || [], success: true };
+      const [core, tx] = await Promise.all([
+        api('getCoreData'),
+        api('getTransactions')
+      ]);
+      if (!core.success || !tx.success) throw new Error('Bad response');
 
       const rawParts = core.parts || [];
       rawParts.sort((a, b) => {
