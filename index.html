@@ -1245,17 +1245,31 @@ function handlePartImageUpload(event, partId) {
 }
 async function savePartImageUrl(partId, dataUrl) {
   toast('Uploading photo...', 'success');
+
+  if (!isOnline) {
+    // Offline: store base64 locally, queue upload for when back online
+    try {
+      await IDB.set('img_pending_' + partId, dataUrl); // base64 for display
+      await IDB.set('img_' + partId, dataUrl);          // also show immediately
+      await IDB.addToQueue('savePartImage', { PartID: partId, imageBase64: dataUrl });
+      const part = state.parts.find(p => p.PartID === partId);
+      if (part) part.ImageUrl = dataUrl; // show locally right away
+      closePartImageCapture();
+      toast('Photo saved offline — will upload when online ✓', 'success');
+      if (state.currentView === 'parts') filterParts();
+    } catch(e) {
+      toast('Failed to save photo offline', 'error');
+    }
+    return;
+  }
+
   try {
-    // Upload to Google Drive via Apps Script backend
-    const res = await api('savePartImage', {
-      PartID: partId,
-      imageBase64: dataUrl
-    });
+    const res = await api('savePartImage', { PartID: partId, imageBase64: dataUrl });
     if (res.success) {
       const part = state.parts.find(p => p.PartID === partId);
       if (part) part.ImageUrl = res.imageUrl;
-      // Also cache locally for instant display
       try { await IDB.set('img_' + partId, res.imageUrl); } catch(e) {}
+      try { await IDB.delete('img_pending_' + partId); } catch(e) {}
       closePartImageCapture();
       toast('Photo saved ✓', 'success');
       if (state.currentView === 'parts') filterParts();
@@ -1263,7 +1277,19 @@ async function savePartImageUrl(partId, dataUrl) {
       toast('Upload failed: ' + (res.error || 'Unknown error'), 'error');
     }
   } catch(e) {
-    toast('Upload failed — check connection', 'error');
+    // Network failed online — save locally and queue
+    try {
+      await IDB.set('img_pending_' + partId, dataUrl);
+      await IDB.set('img_' + partId, dataUrl);
+      await IDB.addToQueue('savePartImage', { PartID: partId, imageBase64: dataUrl });
+      const part = state.parts.find(p => p.PartID === partId);
+      if (part) part.ImageUrl = dataUrl;
+      closePartImageCapture();
+      toast('Photo saved locally — will upload when connection improves ✓', 'success');
+      if (state.currentView === 'parts') filterParts();
+    } catch(e2) {
+      toast('Upload failed — check connection', 'error');
+    }
   }
 }
 
@@ -1283,9 +1309,13 @@ async function removePartImage(partId) {
 async function loadPartImages() {
   // ImageUrl comes from getCoreData (stored in Parts sheet)
   // IDB cache is used for instant display before network loads
+  // img_pending_ keys hold base64 for images not yet uploaded to Drive
   for (const p of state.parts) {
-    if (p.ImageUrl) continue; // already loaded from server
     try {
+      // Pending offline image takes priority (it's the freshest)
+      const pending = await IDB.get('img_pending_' + p.PartID);
+      if (pending) { p.ImageUrl = pending; continue; }
+      if (p.ImageUrl) continue; // already has Drive URL from server
       const cached = await IDB.get('img_' + p.PartID);
       if (cached) p.ImageUrl = cached;
     } catch(e) {}
@@ -1681,10 +1711,28 @@ async function applyLocalWrite(action, data) {
     return { success: true };
   }
   if (action === 'saveSettings') {
-    // Merge into settings cache
     for (const [key, value] of Object.entries(data)) {
       try { await IDB.set(key, value); } catch(e) {}
     }
+    return { success: true };
+  }
+  if (action === 'savePartImage') {
+    // Store base64 locally — will be uploaded when online
+    try {
+      await IDB.set('img_' + data.PartID, data.imageBase64);
+      await IDB.set('img_pending_' + data.PartID, data.imageBase64);
+    } catch(e) {}
+    const part = state.parts.find(p => p.PartID === data.PartID);
+    if (part) part.ImageUrl = data.imageBase64;
+    return { success: true, imageUrl: data.imageBase64, offline: true };
+  }
+  if (action === 'removePartImage') {
+    try {
+      await IDB.delete('img_' + data.PartID);
+      await IDB.delete('img_pending_' + data.PartID);
+    } catch(e) {}
+    const part = state.parts.find(p => p.PartID === data.PartID);
+    if (part) delete part.ImageUrl;
     return { success: true };
   }
   return { success: true }; // optimistic for any other actions
@@ -1740,6 +1788,7 @@ async function autoSync() {
   const writeActions = ['savePart','deletePart','saveSupplier','deleteSupplier',
     'saveSale','updateSale','deleteSale','savePurchase','updatePurchase','deletePurchase',
     'saveChecklistItem','updateChecklistStatus','deleteChecklistItem','clearAllChecklist','bulkSaveChecklist',
+    'savePartImage','removePartImage',
     'saveSupplierRate','deleteSupplierRate','saveSettings',
     'sendOtpNotification','markNotificationRead','requestEditOtp'];
 
@@ -1749,9 +1798,18 @@ async function autoSync() {
   for (const item of writeQueue) {
     try {
       const result = await callServer(item.action, item.data);
-      // Count as synced even if duplicate (success:true with "Already exists" message)
-      if (result.success !== false) synced++;
-      else {
+      if (result.success !== false) {
+        synced++;
+        // After image uploads succeed — replace local base64 with Drive URL and clean up
+        if (item.action === 'savePartImage' && result.imageUrl) {
+          try {
+            await IDB.set('img_' + item.data.PartID, result.imageUrl);
+            await IDB.delete('img_pending_' + item.data.PartID);
+            const part = state.parts.find(p => p.PartID === item.data.PartID);
+            if (part) part.ImageUrl = result.imageUrl;
+          } catch(e) {}
+        }
+      } else {
         console.log('Sync item failed:', item.action, result.error);
         failed++;
       }
