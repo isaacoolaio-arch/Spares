@@ -4438,7 +4438,7 @@ function filterParts() {
             display:flex;align-items:center;justify-content:center;font-size:18px;
             overflow:hidden;cursor:pointer" onclick="event.stopPropagation();showPartImageCapture('${safeId}')">
             ${p.ImageUrl
-              ? `<img src="${p.ImageUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'" />`
+              ? `<img src="${p.ImageUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=&quot;none&quot;" />`
               : moveIcon}
           </div>
 
@@ -5864,98 +5864,103 @@ function printChecklistOrder() {
   const selectedItems = state.checklist.filter(i => window._clSelected && window._clSelected.has(i.ItemID));
   if (selectedItems.length === 0) { toast('No items selected', 'error'); return; }
 
-  const shop     = state.settings.shopName  || 'Oola Spares';
-  const owner    = state.settings.ownerName || '';
-  const phone    = state.settings.phone     || '';
-  const today    = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  const shop  = state.settings.shopName  || 'Oola Spares';
+  const owner = state.settings.ownerName || '';
+  const phone = state.settings.phone     || '';
+  const today = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
 
-  // Group by supplier
+  // Group by supplier, include image
   const bySupplier = {};
   let grandTotal = 0;
   selectedItems.forEach(i => {
     const part = state.parts.find(p => p.PartID === i.PartID) || {};
     const sup  = part.SupplierName || 'Unknown Supplier';
     if (!bySupplier[sup]) bySupplier[sup] = [];
-    const qty  = (window._clQtys && window._clQtys[i.ItemID]) ? window._clQtys[i.ItemID] : (parseInt(i.TargetQty)||1);
-    const cost = parseFloat(part.CostPrice) || 0;
+    const qty    = (window._clQtys && window._clQtys[i.ItemID]) ? window._clQtys[i.ItemID] : (parseInt(i.TargetQty)||1);
+    const cost   = parseFloat(part.CostPrice) || 0;
     const amount = cost * qty;
-    grandTotal += amount;
+    grandTotal  += amount;
     bySupplier[sup].push({
       name: i.PartName,
       size: part.Size || part.Description || '—',
       supplier: sup,
       unitCost: cost,
-      qty,
-      amount
+      qty, amount,
+      imageUrl: part.ImageUrl || ''
     });
   });
 
-  // Build supplier sections
+  // Build supplier sections with images
   let supplierSections = '';
   Object.entries(bySupplier).forEach(([sup, items]) => {
     const supTotal = items.reduce((s,i) => s+i.amount, 0);
     let rows = '';
     items.forEach((item, idx) => {
+      const imgCell = item.imageUrl
+        ? '<img src="' + item.imageUrl + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #eee;display:block" onerror="this.style.display=&quot;none&quot;" />'
+        : '<div style="width:44px;height:44px;border-radius:6px;border:1px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:18px;color:#ccc">🔩</div>';
       rows += '<tr style="background:' + (idx%2===0?'#fff':'#f9f9f9') + '">'
-        + '<td style="padding:7px 10px;border:1px solid #ddd">' + item.name + '</td>'
-        + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:center">' + item.size + '</td>'
-        + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:center">' + sup + '</td>'
-        + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:right">' + (item.unitCost > 0 ? 'UGX ' + item.unitCost.toLocaleString() : '—') + '</td>'
-        + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:center;font-weight:700">' + item.qty + '</td>'
-        + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:right;font-weight:700">' + (item.amount > 0 ? 'UGX ' + item.amount.toLocaleString() : '—') + '</td>'
+        + '<td style="padding:6px 10px;border:1px solid #ddd;vertical-align:middle">'
+        +   '<div style="display:flex;align-items:center;gap:10px">'
+        +   imgCell
+        +   '<div><div style="font-weight:700;font-size:13px">' + item.name + '</div>'
+        +   (item.size && item.size !== '—' ? '<div style="font-size:11px;color:#777">' + item.size + '</div>' : '')
+        +   '</div></div>'
+        + '</td>'
+        + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center;font-size:12px;color:#555">' + item.size + '</td>'
+        + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center;font-size:12px;color:#555">' + sup + '</td>'
+        + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-size:13px">' + (item.unitCost > 0 ? 'UGX ' + item.unitCost.toLocaleString() : '—') + '</td>'
+        + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center;font-weight:800;font-size:14px">' + item.qty + '</td>'
+        + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">' + (item.amount > 0 ? 'UGX ' + item.amount.toLocaleString() : '—') + '</td>'
         + '</tr>';
     });
     supplierSections += '<div style="margin-bottom:24px">'
-      + '<div style="background:#1a1a2e;color:#f5a623;padding:6px 10px;font-weight:800;font-size:13px;border-radius:4px 4px 0 0">📦 ' + sup + '</div>'
+      + '<div style="background:#1a1a2e;color:#f5a623;padding:8px 12px;font-weight:800;font-size:13px;border-radius:6px 6px 0 0;display:flex;align-items:center;gap:6px">📦 ' + sup + '<span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.6)">' + items.length + ' part' + (items.length>1?'s':'') + '</span></div>'
       + '<table style="width:100%;border-collapse:collapse;font-size:13px">'
-      + '<thead><tr style="background:#f0f0f0">'
-      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:left">Part Name</th>'
-      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:center">Size/Spec</th>'
-      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:center">Supplier</th>'
-      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:right">Unit Cost</th>'
-      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:center">Qty</th>'
-      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:right">Amount</th>'
+      + '<thead><tr style="background:#f5f5f5">'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:left;min-width:200px">Part Name</th>'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Size/Spec</th>'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Supplier</th>'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:right">Unit Cost</th>'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Qty</th>'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:right">Amount</th>'
       + '</tr></thead><tbody>' + rows + '</tbody>'
       + '<tfoot><tr style="background:#fff8e6">'
-      + '<td colspan="5" style="padding:7px 10px;border:1px solid #ddd;text-align:right;font-weight:800">Subtotal (' + sup + ')</td>'
-      + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:right;font-weight:900;color:#d97706">' + (supTotal > 0 ? 'UGX ' + supTotal.toLocaleString() : '—') + '</td>'
+      + '<td colspan="5" style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-weight:800;font-size:13px">Subtotal (' + sup + ')</td>'
+      + '<td style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-weight:900;color:#d97706;font-size:14px">' + (supTotal > 0 ? 'UGX ' + supTotal.toLocaleString() : '—') + '</td>'
       + '</tr></tfoot>'
       + '</table></div>';
   });
 
+  // Tagline under shop name
+  const supplierCount = Object.keys(bySupplier).length;
+  const tagline = selectedItems.length + ' part' + (selectedItems.length>1?'s':'')
+    + ' from ' + supplierCount + ' supplier' + (supplierCount>1?'s':'')
+    + (grandTotal > 0 ? ' · Total: UGX ' + grandTotal.toLocaleString() : '');
+
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8">'
     + '<title>Purchase Order - ' + shop + '</title>'
     + '<style>'
-    + 'body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#111}'
-    + '@media print{'
-    + '  body{padding:10px}'
-    + '  .no-print{display:none!important}'
-    + '  button{display:none}'
-    + '}'
+    + 'body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#111;background:#fff}'
+    + 'img{max-width:100%}'
+    + '@media print{.no-print{display:none!important}}'
     + '</style></head><body>'
     // Header
-    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1a1a2e">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #1a1a2e">'
     + '<div>'
-    + '<div style="font-size:22px;font-weight:900;color:#1a1a2e">' + shop + '</div>'
-    + (owner ? '<div style="font-size:13px;color:#555">Owner: ' + owner + '</div>' : '')
-    + (phone ? '<div style="font-size:13px;color:#555">Tel: ' + phone + '</div>' : '')
+    + '<div style="font-size:24px;font-weight:900;color:#1a1a2e;letter-spacing:-0.5px">' + shop + '</div>'
+    + (owner ? '<div style="font-size:12px;color:#555;margin-top:2px">Owner: ' + owner + '</div>' : '')
+    + (phone ? '<div style="font-size:12px;color:#555">Tel: ' + phone + '</div>' : '')
+    + '<div style="font-size:11px;color:#999;margin-top:4px;font-style:italic">' + tagline + '</div>'
     + '</div>'
     + '<div style="text-align:right">'
-    + '<div style="font-size:18px;font-weight:800;color:#d97706">PURCHASE ORDER</div>'
-    + '<div style="font-size:12px;color:#777">Date: ' + today + '</div>'
-    + '<div style="font-size:12px;color:#777">Items: ' + selectedItems.length + ' parts</div>'
+    + '<div style="font-size:20px;font-weight:900;color:#d97706;letter-spacing:1px">PURCHASE ORDER</div>'
+    + '<div style="font-size:12px;color:#777;margin-top:4px">Date: ' + today + '</div>'
     + '</div></div>'
-    // Supplier sections
     + supplierSections
-    // Grand total
-    + '<div style="margin-top:16px;padding:12px 16px;background:#1a1a2e;color:#fff;border-radius:8px;display:flex;justify-content:space-between;align-items:center">'
-    + '<div style="font-size:15px;font-weight:800">GRAND TOTAL</div>'
-    + '<div style="font-size:20px;font-weight:900;color:#f5a623">' + (grandTotal > 0 ? 'UGX ' + grandTotal.toLocaleString() : '—') + '</div>'
-    + '</div>'
-    // Print buttons
-    + '<div class="no-print" style="margin-top:20px;display:flex;gap:10px;justify-content:center">'
-    + '<button onclick="window.print()" style="background:#1a1a2e;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🖨 Print / Save as PDF</button>'
-    + '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">✕ Close</button>'
+    + '<div style="margin-top:16px;padding:14px 18px;background:#1a1a2e;color:#fff;border-radius:10px;display:flex;justify-content:space-between;align-items:center">'
+    + '<div style="font-size:16px;font-weight:800;letter-spacing:0.5px">GRAND TOTAL</div>'
+    + '<div style="font-size:22px;font-weight:900;color:#f5a623">' + (grandTotal > 0 ? 'UGX ' + grandTotal.toLocaleString() : '—') + '</div>'
     + '</div>'
     + '</body></html>';
 
