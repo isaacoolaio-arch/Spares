@@ -1333,11 +1333,11 @@ const IDB = {
   async open() {
     if (this.db) return this.db;
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open('OolaSpares', 2);
+      const req = indexedDB.open('OolaSpares', 3);
       req.onupgradeneeded = e => {
         const db = e.target.result;
         // Main data stores
-        ['parts','suppliers','supplierRates','sales','purchases','checklist','settings'].forEach(store => {
+        ['parts','suppliers','supplierRates','sales','purchases','checklist','settings','customers'].forEach(store => {
           if (!db.objectStoreNames.contains(store)) {
             db.createObjectStore(store, { keyPath: store === 'settings' ? 'key' : null, autoIncrement: store === 'settings' ? false : true });
           }
@@ -1643,7 +1643,51 @@ async function applyLocalWrite(action, data) {
     await IDB.setAll('checklist', list);
     return { success: true };
   }
-  return { success: true }; // optimistic
+  if (action === 'deleteChecklistItem') {
+    const list = await IDB.getAll('checklist');
+    await IDB.setAll('checklist', list.filter(c => c.ItemID !== data.ItemID));
+    return { success: true };
+  }
+  if (action === 'clearAllChecklist') {
+    await IDB.setAll('checklist', []);
+    return { success: true };
+  }
+  if (action === 'bulkSaveChecklist') {
+    const list = await IDB.getAll('checklist');
+    const existing = new Set(list.map(c => c.PartID));
+    const newItems = (data.items || []).filter(i => !existing.has(i.PartID)).map(i => ({
+      ...i, ItemID: 'CHK-' + Date.now() + '-' + Math.random().toString(36).substr(2,4),
+      Status: 'Pending'
+    }));
+    await IDB.setAll('checklist', [...list, ...newItems]);
+    return { success: true, added: newItems.length };
+  }
+  if (action === 'saveCustomer') {
+    const customers = await IDB.getAll('customers');
+    if (data.CustomerID) {
+      const i = customers.findIndex(c => c.CustomerID === data.CustomerID);
+      if (i >= 0) customers[i] = { ...customers[i], ...data };
+      else customers.push(data);
+    } else {
+      data.CustomerID = 'CUS-' + Date.now() + '-local';
+      customers.push(data);
+    }
+    await IDB.setAll('customers', customers);
+    return { success: true };
+  }
+  if (action === 'deleteCustomer') {
+    const customers = await IDB.getAll('customers');
+    await IDB.setAll('customers', customers.filter(c => c.CustomerID !== data.CustomerID));
+    return { success: true };
+  }
+  if (action === 'saveSettings') {
+    // Merge into settings cache
+    for (const [key, value] of Object.entries(data)) {
+      try { await IDB.set(key, value); } catch(e) {}
+    }
+    return { success: true };
+  }
+  return { success: true }; // optimistic for any other actions
 }
 
 async function callServer(action, data = {}) {
@@ -1695,7 +1739,7 @@ async function autoSync() {
   // Filter out read-only actions that should never be in the queue
   const writeActions = ['savePart','deletePart','saveSupplier','deleteSupplier',
     'saveSale','updateSale','deleteSale','savePurchase','updatePurchase','deletePurchase',
-    'saveChecklistItem','updateChecklistStatus','deleteChecklistItem','clearAllChecklist',
+    'saveChecklistItem','updateChecklistStatus','deleteChecklistItem','clearAllChecklist','bulkSaveChecklist',
     'saveSupplierRate','deleteSupplierRate','saveSettings',
     'sendOtpNotification','markNotificationRead','requestEditOtp'];
 
