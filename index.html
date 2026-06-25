@@ -5976,11 +5976,12 @@ async function markSelectedOrdered() {
   });
   window._clSelected = new Set();
   window._clQtys = {};
+  window._clFilter = 'all'; // Switch to All so Ordered section is visible
   renderChecklist();
   // Sync to server in parallel
   try {
     await Promise.all(toUpdate.map(i => api('updateChecklistStatus', { ItemID: i.ItemID, Status: 'Ordered', TargetQty: i.TargetQty })));
-    toast('✓ ' + toUpdate.length + ' parts marked as Ordered', 'success');
+    toast('✓ ' + toUpdate.length + ' parts ordered — tap ✓ when stock arrives', 'success');
   } catch(e) {
     toast('Some updates failed — tap Sync to retry', 'error');
   }
@@ -6004,23 +6005,60 @@ async function markAllOrdered() {
 async function cycleCheckStatus(itemId, current) {
   const next = current === 'Pending' ? 'Ordered' : current === 'Ordered' ? 'Received' : 'Pending';
 
-  // Optimistic update — change state locally and re-render immediately
+  // Optimistic update
   const item = state.checklist.find(i => i.ItemID === itemId);
   if (item) item.Status = next;
   renderChecklist();
 
-  // Sync to server in background
+  // Sync to server
   try {
     await api('updateChecklistStatus', { ItemID: itemId, Status: next });
-    // Update IndexedDB cache silently
     const list = await IDB.getAll('checklist');
     const idx = list.findIndex(i => i.ItemID === itemId);
     if (idx >= 0) { list[idx].Status = next; await IDB.setAll('checklist', list); }
+
+    // When marked Received → auto-create a Purchase record
+    if (next === 'Received' && item) {
+      await autoCreatePurchaseFromChecklist(item);
+    }
   } catch(e) {
-    // Revert on failure
     if (item) item.Status = current;
     renderChecklist();
     toast('Failed to update — try again', 'error');
+  }
+}
+
+async function autoCreatePurchaseFromChecklist(item) {
+  const part = state.parts.find(p => p.PartID === item.PartID);
+  if (!part) return;
+
+  const qty       = parseInt(item.TargetQty) || 1;
+  const costPrice = parseFloat(part.CostPrice) || 0;
+  const total     = qty * costPrice;
+  const today     = new Date();
+  const dateStr   = today.getDate() + '-'
+    + today.toLocaleString('en',{month:'short'}) + '-'
+    + today.getFullYear();
+
+  const purchaseData = {
+    PartID:       part.PartID,
+    PartName:     part.Name || part.ItemName,
+    Qty:          qty,
+    CostPrice:    costPrice,
+    TotalCost:    total,
+    SupplierName: part.SupplierName || '',
+    Date:         dateStr,
+    Notes:        'Auto from checklist order',
+    UpdateCost:   'false'
+  };
+
+  try {
+    await api('savePurchase', purchaseData);
+    await loadAll();
+    renderChecklist();
+    toast('✓ Received & purchase recorded — UGX ' + total.toLocaleString(), 'success');
+  } catch(e) {
+    toast('Received but failed to record purchase — add manually in Purchases', 'error');
   }
 }
 
