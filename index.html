@@ -5565,8 +5565,12 @@ function renderChecklist() {
     const autoBtn = !partsLoaded
       ? `<div style="font-size:13px;color:var(--text3);padding:12px;background:var(--surface2);border-radius:10px">⟳ Loading parts… tap Sync if this persists</div>`
       : lowParts.length > 0
-        ? `<button onclick="autoAddLowStock()" style="width:100%;padding:13px;border-radius:12px;background:var(--accent);border:none;color:#000;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 4px 16px rgba(245,166,35,.25);margin-bottom:8px">⚡ Auto-add ${lowParts.length} low/out of stock parts</button><div style="font-size:11px;color:var(--text3)">${lowParts.slice(0,4).map(p=>p.Name||p.ItemName).join(', ')}${lowParts.length>4?` +${lowParts.length-4} more`:''}</div>`
-        : `<div style="font-size:13px;color:var(--green);padding:10px;background:rgba(74,222,128,.08);border-radius:10px">✓ All parts are well stocked — nothing to reorder</div>`;
+        ? `<button onclick="autoAddLowStock()" style="width:100%;padding:13px;border-radius:12px;background:var(--accent);border:none;color:#000;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 4px 16px rgba(245,166,35,.25);margin-bottom:8px">⚡ Auto-add ${lowParts.length} low/out of stock parts</button>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:12px">${lowParts.slice(0,4).map(p=>p.Name||p.ItemName).join(', ')}${lowParts.length>4?' +' + (lowParts.length-4) + ' more':''}</div>
+          <div style="color:var(--text3);font-size:12px;margin-bottom:8px">— or add any part —</div>
+          <button onclick="showAddChecklistModal()" style="width:100%;padding:11px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">➕ Add specific part to order</button>`
+        : `<div style="font-size:13px;color:var(--green);padding:10px;background:rgba(74,222,128,.08);border-radius:10px;margin-bottom:12px">✓ All parts are well stocked</div>
+           <button onclick="showAddChecklistModal()" style="width:100%;padding:11px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">➕ Add any part to order list</button>`;
     document.getElementById('tx-content').innerHTML = `
       <div style="text-align:center;padding:28px 16px">
         <div style="font-size:44px;margin-bottom:12px">📋</div>
@@ -6748,26 +6752,69 @@ async function doDeletePurchase(purchaseId) {
 // CHECKLIST MODAL
 // ============================================================
 function showAddChecklistModal() {
+  // Sort parts: out of stock first, then low stock, then in stock
+  const sorted = [...state.parts].sort((a,b) => {
+    const qa = parseInt(a.StockQty)||0, qb = parseInt(b.StockQty)||0;
+    const ra = parseInt(a.ReorderLevel)||5, rb = parseInt(b.ReorderLevel)||5;
+    const scoreA = qa <= 0 ? 0 : qa <= ra ? 1 : 2;
+    const scoreB = qb <= 0 ? 0 : qb <= rb ? 1 : 2;
+    if (scoreA !== scoreB) return scoreA - scoreB;
+    return (a.Name||'').localeCompare(b.Name||'');
+  });
+
+  const alreadyOnList = new Set(state.checklist.map(c => c.PartID));
+
   showModal(`
     <div class="modal-header">
-      <div class="modal-title">Add to Checklist</div>
+      <div class="modal-title">Add Part to Order List</div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <label>Part *</label>
-    <select id="cl-part">
-      <option value="">-- Select Part --</option>
-      ${state.parts.map(p => `<option value="${p.PartID}||${p.Name}">${p.Name} (${p.StockQty} in stock)</option>`).join('')}
+    <select id="cl-part" onchange="onChecklistPartChange(this)">
+      <option value="">-- Select any part --</option>
+      ${sorted.map(p => {
+        const qty = parseInt(p.StockQty)||0;
+        const reorder = parseInt(p.ReorderLevel)||5;
+        const status = qty <= 0 ? ' ⚠ OUT' : qty <= reorder ? ' · Low ('+qty+')' : ' · '+qty+' in stock';
+        const already = alreadyOnList.has(p.PartID) ? ' ✓' : '';
+        return `<option value="${p.PartID}||${p.Name||p.ItemName}" data-qty="${qty}" data-reorder="${reorder}" data-cost="${p.CostPrice||0}" data-supplier="${p.SupplierName||''}">${(p.Name||p.ItemName)}${status}${already}</option>`;
+      }).join('')}
     </select>
-    <label>Target Qty to Restock</label>
-    <input id="cl-qty" type="number" placeholder="1" value="1" />
+    <div id="cl-part-info" style="font-size:12px;color:var(--text3);margin:-6px 0 8px;padding:6px 10px;background:var(--surface2);border-radius:8px;display:none"></div>
+    <label>Qty to Order</label>
+    <input id="cl-qty" type="number" min="1" placeholder="How many to order?" value="1" />
     <label>Priority</label>
     <select id="cl-priority">
       <option>Normal</option><option>High</option><option>Urgent</option>
     </select>
-    <label>Notes</label>
-    <input id="cl-notes" placeholder="Optional" />
-    <button class="btn btn-primary" onclick="saveChecklistItem()">Add to Checklist</button>
+    <label>Notes <span style="font-size:11px;color:var(--text3);font-weight:400">(optional — reason for ordering)</span></label>
+    <input id="cl-notes" placeholder="e.g. Customer request, promotions, top-up..." />
+    <button class="btn btn-primary" onclick="saveChecklistItem()">➕ Add to Order List</button>
   `);
+}
+
+function onChecklistPartChange(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  const info = document.getElementById('cl-part-info');
+  if (!opt || !opt.value) { info.style.display='none'; return; }
+  const qty      = parseInt(opt.dataset.qty)||0;
+  const reorder  = parseInt(opt.dataset.reorder)||5;
+  const cost     = parseFloat(opt.dataset.cost)||0;
+  const supplier = opt.dataset.supplier || '—';
+  const status   = qty <= 0 ? '<span style="color:var(--red);font-weight:800">Out of stock</span>'
+                 : qty <= reorder ? '<span style="color:var(--accent);font-weight:800">Low stock ('+qty+' left)</span>'
+                 : '<span style="color:var(--green);font-weight:700">In stock ('+qty+')</span>';
+  info.innerHTML = status
+    + (cost > 0 ? ' &nbsp;·&nbsp; UGX <strong>' + cost.toLocaleString() + '</strong>/unit' : '')
+    + (supplier !== '—' ? ' &nbsp;·&nbsp; ' + supplier : '');
+  info.style.display = 'block';
+  // Auto-set suggested qty & priority
+  const qtyInput = document.getElementById('cl-qty');
+  const priInput = document.getElementById('cl-priority');
+  if (!qtyInput.value || qtyInput.value === '1') {
+    qtyInput.value = qty <= 0 ? reorder : Math.max(1, reorder - qty + reorder);
+  }
+  if (qty <= 0 && priInput) priInput.value = 'High';
 }
 
 async function autoAddLowStock() {
