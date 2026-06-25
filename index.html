@@ -5679,29 +5679,12 @@ function renderChecklist() {
         + (supplier ? ' &nbsp;·&nbsp; ' + supplier : '')
         + '</div></div>';
 
-      if (isPending) {
-        if (isSelected) {
-          // Show qty input + running cost
-          const customQty = window._clQtys && window._clQtys[i.ItemID] ? window._clQtys[i.ItemID] : (parseInt(i.TargetQty)||1);
-          const runningCost = cost * customQty;
-          html += '<div style="flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px">'
-            + '<div style="display:flex;align-items:center;gap:4px">'
-            + '<span style="font-size:11px;color:var(--text3)">Qty:</span>'
-            + '<input type="number" min="1" max="999" value="' + customQty + '"'
-            + ' data-iid="' + i.ItemID + '"'
-            + ' onchange="updateChecklistQty(this.dataset.iid, parseInt(this.value)||1)"'
-            + ' onclick="this.select()"'
-            + ' style="width:52px;padding:3px 6px;border-radius:6px;border:1px solid var(--blue);background:var(--surface2);color:var(--text);font-size:13px;font-weight:700;font-family:var(--font);text-align:center" />'
-            + '</div>'
-            + (runningCost > 0 ? '<div style="font-size:12px;font-weight:800;color:var(--accent)">UGX ' + runningCost.toLocaleString() + '</div>' : '')
-            + '</div>';
-        } else if (cost > 0) {
-          // Unselected — show unit price as a tap hint
-          html += '<div style="text-align:right;flex-shrink:0">'
-            + '<div style="font-size:12px;font-weight:700;color:var(--text3)">UGX ' + cost.toLocaleString() + '</div>'
-            + '<div style="font-size:10px;color:var(--text3)">per unit</div>'
-            + '</div>';
-        }
+      if (isPending && cost > 0) {
+        // Always show unit cost on the right — qty editing is in the summary box above
+        html += '<div style="text-align:right;flex-shrink:0">'
+          + '<div style="font-size:12px;font-weight:700;color:' + (isSelected ? 'var(--blue)' : 'var(--text3)') + '">UGX ' + cost.toLocaleString() + '</div>'
+          + '<div style="font-size:10px;color:var(--text3)">per unit</div>'
+          + '</div>';
       }
 
       html += '<button data-iid="' + i.ItemID + '"'
@@ -5717,37 +5700,62 @@ function renderChecklist() {
   const selectedItems = pending.filter(i => sel.has(i.ItemID));
   let selSummaryHtml = '';
   if (selectedItems.length > 0) {
-    // Group by supplier
-    const bySupplier = {};
+    // Build per-item rows with qty inputs in the summary box
+    let itemRows = '';
     let grandTotal = 0;
+
     selectedItems.forEach(i => {
       const part = state.parts.find(p => p.PartID === i.PartID) || {};
-      const sup = part.SupplierName || 'Unknown Supplier';
       const customQty = (window._clQtys && window._clQtys[i.ItemID]) ? window._clQtys[i.ItemID] : (parseInt(i.TargetQty)||1);
-      const cost = (parseFloat(part.CostPrice) || 0) * customQty;
-      if (!bySupplier[sup]) bySupplier[sup] = { items: 0, total: 0 };
-      bySupplier[sup].items++;
-      bySupplier[sup].total += cost;
-      grandTotal += cost;
-    });
-    let supplierRows = '';
-    Object.entries(bySupplier).sort((a,b) => b[1].total - a[1].total).forEach(([sup, data]) => {
-      supplierRows += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'
-        + '<div><div style="font-size:13px;font-weight:700">' + sup + '</div>'
-        + '<div style="font-size:11px;color:var(--text3)">' + data.items + ' part' + (data.items>1?'s':'') + '</div></div>'
-        + '<div style="font-size:14px;font-weight:800;color:var(--accent)">UGX ' + data.total.toLocaleString() + '</div>'
+      const cost = parseFloat(part.CostPrice) || 0;
+      const lineTotal = cost * customQty;
+      grandTotal += lineTotal;
+      const s = stockMap[i.PartID];
+      const badge = s && s.qty <= 0
+        ? '<span style="font-size:9px;font-weight:800;color:var(--red);background:rgba(255,80,80,.12);padding:1px 5px;border-radius:4px;margin-left:4px">OUT</span>'
+        : s && s.qty <= s.reorder
+          ? '<span style="font-size:9px;font-weight:800;color:var(--accent);background:rgba(240,165,0,.12);padding:1px 5px;border-radius:4px;margin-left:4px">LOW</span>'
+          : '';
+
+      itemRows += '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(59,130,246,.15)">'
+        // Part name + badge
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + i.PartName + badge + '</div>'
+        + (cost > 0 ? '<div style="font-size:11px;color:var(--text3)">UGX ' + cost.toLocaleString() + '/unit</div>' : '')
+        + '</div>'
+        // Qty input
+        + '<div style="display:flex;align-items:center;gap:5px;flex-shrink:0">'
+        + '<span style="font-size:11px;color:var(--text3)">Qty</span>'
+        + '<input type="number" min="1" max="999" value="' + customQty + '"'
+        + ' data-iid="' + i.ItemID + '"'
+        + ' onchange="updateChecklistQty(this.dataset.iid,parseInt(this.value)||1)"'
+        + ' onclick="this.select()"'
+        + ' style="width:55px;padding:4px 6px;border-radius:8px;border:1.5px solid var(--blue);background:var(--surface);color:var(--text);font-size:14px;font-weight:800;font-family:var(--font);text-align:center" />'
+        + '</div>'
+        // Line total
+        + (cost > 0
+          ? '<div style="text-align:right;flex-shrink:0;min-width:75px"><div style="font-size:13px;font-weight:800;color:var(--accent)">UGX ' + lineTotal.toLocaleString() + '</div></div>'
+          : '<div style="min-width:75px"></div>')
+        // Remove from selection
+        + '<button data-iid="' + i.ItemID + '" onclick="toggleChecklistSelect(this.dataset.iid)" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:0 2px;flex-shrink:0">×</button>'
         + '</div>';
     });
+
     selSummaryHtml = '<div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2);border-radius:14px;padding:14px;margin-bottom:12px">'
+      // Header
       + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
       + '<div style="font-size:13px;font-weight:800;color:var(--blue)">📋 ' + selectedItems.length + ' selected to order</div>'
-      + '<button onclick="clearChecklistSelection()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;font-family:var(--font)">Clear</button>'
+      + '<button onclick="clearChecklistSelection()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;font-family:var(--font)">Clear all</button>'
       + '</div>'
-      + supplierRows
+      // Item rows with qty inputs
+      + itemRows
+      // Grand total + action button
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px">'
-      + '<div><div style="font-size:11px;color:var(--text3)">TOTAL COST</div>'
-      + '<div style="font-size:18px;font-weight:900;color:var(--accent)">UGX ' + grandTotal.toLocaleString() + '</div></div>'
-      + '<button onclick="markSelectedOrdered()" style="background:var(--blue);border:none;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:800;cursor:pointer;font-family:var(--font)">⟳ Mark as Ordered</button>'
+      + '<div>'
+      + '<div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase">Total Cost</div>'
+      + '<div style="font-size:20px;font-weight:900;color:var(--accent)">UGX ' + grandTotal.toLocaleString() + '</div>'
+      + '</div>'
+      + '<button onclick="markSelectedOrdered()" style="background:var(--blue);border:none;color:#fff;border-radius:10px;padding:11px 20px;font-size:13px;font-weight:800;cursor:pointer;font-family:var(--font)">⟳ Mark as Ordered</button>'
       + '</div></div>';
   }
 
