@@ -5622,35 +5622,115 @@ function renderChecklist() {
 
   const statusColor = { 'Pending': 'var(--red)', 'Ordered': 'var(--blue)', 'Received': 'var(--green)' };
 
+  // ── SELECTION STATE ──
+  if (!window._clSelected) window._clSelected = new Set();
+  const sel = window._clSelected;
+
+  // ── SECTION RENDERER ──
   const section = (title, list, status) => {
     if (list.length === 0) return '';
-    const bulkBtn = status === 'Pending'
+    const isPending = status === 'Pending';
+    const bulkBtn = isPending
       ? '<button onclick="markAllOrdered()" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:var(--blue);border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">⟳ Mark all ordered</button>'
       : '';
     let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px">'
       + '<div class="section-label" style="margin:0">' + title + ' <span style="color:var(--text3);font-weight:500;font-size:12px">(' + list.length + ')</span></div>'
       + bulkBtn + '</div>';
+
     list.forEach(i => {
+      const part = state.parts.find(p => p.PartID === i.PartID) || {};
       const s = stockMap[i.PartID];
+      const isSelected = sel.has(i.ItemID);
+      const cost = parseFloat(part.CostPrice) || 0;
+      const supplier = part.SupplierName || '';
+      const totalCost = cost * (parseInt(i.TargetQty) || 1);
+
       let stockBadge = '';
       if (s) {
         if (s.qty <= 0) stockBadge = '<span style="font-size:10px;font-weight:800;color:var(--red);background:rgba(255,80,80,.12);padding:2px 6px;border-radius:6px;margin-left:6px">OUT</span>';
         else if (s.qty <= s.reorder) stockBadge = '<span style="font-size:10px;font-weight:800;color:var(--accent);background:rgba(240,165,0,.12);padding:2px 6px;border-radius:6px;margin-left:6px">LOW ' + s.qty + '</span>';
       }
-      const boxClass = status === 'Ordered' ? 'check-box ordered' : status === 'Received' ? 'check-box checked' : 'check-box';
-      const boxIcon  = status === 'Received' ? '✓' : status === 'Ordered' ? '⟳' : '';
-      html += '<div class="check-item" id="ci-' + i.ItemID + '">'
-        + '<div class="' + boxClass + '" onclick="cycleCheckStatus(\'" + i.ItemID + "\',\'" + i.Status + "\')">' + boxIcon + '</div>'
-        + '<div style="flex:1;min-width:0">'
+
+      // Build row using data attributes (avoids all quote escaping)
+      const rowStyle = isPending && isSelected ? 'background:rgba(59,130,246,.08);border-color:var(--blue);' : '';
+      html += '<div class="check-item" id="ci-' + i.ItemID + '" style="' + rowStyle + '">';
+
+      if (isPending) {
+        html += '<input type="checkbox" ' + (isSelected ? 'checked' : '')
+          + ' data-iid="' + i.ItemID + '"'
+          + ' onchange="toggleChecklistSelect(this.getAttribute("data-iid"))"'
+          + ' style="width:18px;height:18px;accent-color:var(--blue);flex-shrink:0;cursor:pointer" />';
+      } else {
+        const boxClass = status === 'Ordered' ? 'check-box ordered' : status === 'Received' ? 'check-box checked' : 'check-box';
+        const boxIcon  = status === 'Received' ? '✓' : status === 'Ordered' ? '⟳' : '';
+        html += '<div class="' + boxClass + '"'
+          + ' data-iid="' + i.ItemID + '" data-ist="' + i.Status + '"'
+          + ' onclick="cycleCheckStatus(this.getAttribute("data-iid"),this.getAttribute("data-ist"))">'
+          + boxIcon + '</div>';
+      }
+
+      html += '<div style="flex:1;min-width:0">'
         + '<div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + i.PartName + stockBadge + '</div>'
-        + '<div style="font-size:11px;color:var(--text3);margin-top:2px">Need: ' + i.TargetQty + ' · ' + (i.Priority||'Normal') + ' · <span style="color:' + statusColor[status] + '">' + status + '</span></div>'
-        + '</div>'
-        + '<button onclick="deleteChecklistItem(\'" + i.ItemID + "\')" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0">×</button>'
-        + '</div>';
+        + '<div style="font-size:11px;color:var(--text3);margin-top:2px">'
+        + 'Qty: ' + i.TargetQty
+        + (cost > 0 ? ' &nbsp;·&nbsp; <span style="color:var(--text2)">UGX ' + cost.toLocaleString() + '/each</span>' : '')
+        + (supplier ? ' &nbsp;·&nbsp; ' + supplier : '')
+        + '</div></div>';
+
+      if (isPending && totalCost > 0) {
+        html += '<div style="text-align:right;flex-shrink:0;min-width:70px">'
+          + '<div style="font-size:13px;font-weight:800;color:var(--accent)">UGX ' + totalCost.toLocaleString() + '</div>'
+          + '<div style="font-size:10px;color:var(--text3)">total</div>'
+          + '</div>';
+      }
+
+      html += '<button data-iid="' + i.ItemID + '"'
+        + ' onclick="deleteChecklistItem(this.getAttribute("data-iid"))"'
+        + ' style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0">×</button>';
+
+      html += '</div>';
     });
     return html;
   };
 
+  // ── SELECTION SUMMARY BAR (shows when items selected) ──
+  const selectedItems = pending.filter(i => sel.has(i.ItemID));
+  let selSummaryHtml = '';
+  if (selectedItems.length > 0) {
+    // Group by supplier
+    const bySupplier = {};
+    let grandTotal = 0;
+    selectedItems.forEach(i => {
+      const part = state.parts.find(p => p.PartID === i.PartID) || {};
+      const sup = part.SupplierName || 'Unknown Supplier';
+      const cost = (parseFloat(part.CostPrice) || 0) * (parseInt(i.TargetQty) || 1);
+      if (!bySupplier[sup]) bySupplier[sup] = { items: 0, total: 0 };
+      bySupplier[sup].items++;
+      bySupplier[sup].total += cost;
+      grandTotal += cost;
+    });
+    let supplierRows = '';
+    Object.entries(bySupplier).sort((a,b) => b[1].total - a[1].total).forEach(([sup, data]) => {
+      supplierRows += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'
+        + '<div><div style="font-size:13px;font-weight:700">' + sup + '</div>'
+        + '<div style="font-size:11px;color:var(--text3)">' + data.items + ' part' + (data.items>1?'s':'') + '</div></div>'
+        + '<div style="font-size:14px;font-weight:800;color:var(--accent)">UGX ' + data.total.toLocaleString() + '</div>'
+        + '</div>';
+    });
+    selSummaryHtml = '<div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2);border-radius:14px;padding:14px;margin-bottom:12px">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+      + '<div style="font-size:13px;font-weight:800;color:var(--blue)">📋 ' + selectedItems.length + ' selected to order</div>'
+      + '<button onclick="clearChecklistSelection()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;font-family:var(--font)">Clear</button>'
+      + '</div>'
+      + supplierRows
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px">'
+      + '<div><div style="font-size:11px;color:var(--text3)">TOTAL COST</div>'
+      + '<div style="font-size:18px;font-weight:900;color:var(--accent)">UGX ' + grandTotal.toLocaleString() + '</div></div>'
+      + '<button onclick="markSelectedOrdered()" style="background:var(--blue);border:none;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:800;cursor:pointer;font-family:var(--font)">⟳ Mark as Ordered</button>'
+      + '</div></div>';
+  }
+
+  // ── STAT CARDS + FILTER PILLS ──
   const summary = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
       <div class="stat-card" style="text-align:center;padding:10px">
@@ -5667,12 +5747,12 @@ function renderChecklist() {
       </div>
     </div>
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-      ${filterPill('all',  'All',           null,     'var(--text2)')}
-      ${filterPill('out',  '🔴 Out of stock', outCount, 'var(--red)')}
-      ${filterPill('low',  '🟡 Low stock',    lowCount, 'var(--accent)')}
+      ${filterPill('all', 'All', null, 'var(--text2)')}
+      ${filterPill('out', '🔴 Out of stock', outCount, 'var(--red)')}
+      ${filterPill('low', '🟡 Low stock', lowCount, 'var(--accent)')}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div style="font-size:11px;color:var(--text3)">Tap circle: 📌 Pending → ⟳ Ordered → ✓ Received</div>
+      <div style="font-size:11px;color:var(--text3)">☑ Select parts to order · tap ⟳ to cycle status</div>
       <div style="display:flex;gap:6px">
         ${allReceived.length > 0 ? `<button onclick="clearReceived()" style="background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:var(--green);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">🗑 Clear ${allReceived.length} received</button>` : ''}
         <button onclick="clearAllChecklist()" style="background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.25);color:var(--red);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✕ Clear all</button>
@@ -5680,18 +5760,49 @@ function renderChecklist() {
     </div>`;
 
   const emptyFilter = (pending.length + ordered.length + received.length) === 0
-    ? `<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">No ${activeFilter === 'out' ? 'out of stock' : 'low stock'} items in checklist</div>` : '';
+    ? '<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">No ' + (activeFilter === 'out' ? 'out of stock' : 'low stock') + ' items in checklist</div>' : '';
 
   document.getElementById('tx-content').innerHTML =
-    summary + emptyFilter +
+    summary + selSummaryHtml + emptyFilter +
     section('📌 To Order', pending, 'Pending') +
     section('⟳ Ordered', ordered, 'Ordered') +
     section('✓ Received', received, 'Received');
 }
 
+
 function setChecklistFilter(f) {
   window._clFilter = f;
   renderChecklist();
+}
+
+function toggleChecklistSelect(itemId) {
+  if (!window._clSelected) window._clSelected = new Set();
+  if (window._clSelected.has(itemId)) window._clSelected.delete(itemId);
+  else window._clSelected.add(itemId);
+  renderChecklist();
+}
+
+function clearChecklistSelection() {
+  window._clSelected = new Set();
+  renderChecklist();
+}
+
+async function markSelectedOrdered() {
+  if (!window._clSelected || window._clSelected.size === 0) return;
+  const ids = [...window._clSelected];
+  const toUpdate = state.checklist.filter(i => ids.includes(i.ItemID) && i.Status === 'Pending');
+  if (toUpdate.length === 0) return;
+  // Optimistic update
+  toUpdate.forEach(i => i.Status = 'Ordered');
+  window._clSelected = new Set();
+  renderChecklist();
+  // Sync to server in parallel
+  try {
+    await Promise.all(toUpdate.map(i => api('updateChecklistStatus', { ItemID: i.ItemID, Status: 'Ordered' })));
+    toast('✓ ' + toUpdate.length + ' parts marked as Ordered', 'success');
+  } catch(e) {
+    toast('Some updates failed — tap Sync to retry', 'error');
+  }
 }
 
 async function markAllOrdered() {
