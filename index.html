@@ -5565,12 +5565,14 @@ function renderChecklist() {
     const autoBtn = !partsLoaded
       ? `<div style="font-size:13px;color:var(--text3);padding:12px;background:var(--surface2);border-radius:10px">⟳ Loading parts… tap Sync if this persists</div>`
       : lowParts.length > 0
-        ? `<button onclick="autoAddLowStock()" style="width:100%;padding:13px;border-radius:12px;background:var(--accent);border:none;color:#000;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 4px 16px rgba(245,166,35,.25);margin-bottom:8px">⚡ Auto-add ${lowParts.length} low/out of stock parts</button>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:12px">${lowParts.slice(0,4).map(p=>p.Name||p.ItemName).join(', ')}${lowParts.length>4?' +' + (lowParts.length-4) + ' more':''}</div>
-          <div style="color:var(--text3);font-size:12px;margin-bottom:8px">— or add any part —</div>
+        ? `<button onclick="autoAddLowStock()" style="width:100%;padding:13px;border-radius:12px;background:var(--accent);border:none;color:#000;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 4px 16px rgba(245,166,35,.25);margin-bottom:8px">⚡ Auto-add ${state.parts.length} parts (${lowParts.length} low/out · ${state.parts.length - lowParts.length} in stock)</button>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Low/out first · in-stock parts for easy reach</div>
+          <div style="color:var(--text3);font-size:12px;margin-bottom:8px">— or add a specific part —</div>
           <button onclick="showAddChecklistModal()" style="width:100%;padding:11px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">➕ Add specific part to order</button>`
-        : `<div style="font-size:13px;color:var(--green);padding:10px;background:rgba(74,222,128,.08);border-radius:10px;margin-bottom:12px">✓ All parts are well stocked</div>
-           <button onclick="showAddChecklistModal()" style="width:100%;padding:11px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">➕ Add any part to order list</button>`;
+        : `<button onclick="autoAddLowStock()" style="width:100%;padding:13px;border-radius:12px;background:var(--accent);border:none;color:#000;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 4px 16px rgba(245,166,35,.25);margin-bottom:8px">⚡ Auto-add all ${state.parts.length} parts to order list</button>
+           <div style="font-size:11px;color:var(--text3);margin-bottom:12px">All parts in stock · add for easy ordering</div>
+           <div style="color:var(--text3);font-size:12px;margin-bottom:8px">— or add a specific part —</div>
+           <button onclick="showAddChecklistModal()" style="width:100%;padding:11px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">➕ Add specific part to order</button>`;
     document.getElementById('tx-content').innerHTML = `
       <div style="text-align:center;padding:28px 16px">
         <div style="font-size:44px;margin-bottom:12px">📋</div>
@@ -5598,6 +5600,7 @@ function renderChecklist() {
   const applyStockFilter = (list) => {
     if (activeFilter === 'out')  return list.filter(i => { const s = stockMap[i.PartID]; return s && s.qty <= 0; });
     if (activeFilter === 'low')  return list.filter(i => { const s = stockMap[i.PartID]; return s && s.qty > 0 && s.qty <= s.reorder; });
+    if (activeFilter === 'ok')   return list.filter(i => { const s = stockMap[i.PartID]; return !s || s.qty > s.reorder; });
     return list;
   };
 
@@ -5609,9 +5612,9 @@ function renderChecklist() {
   const ordered  = applyStockFilter(allOrdered);
   const received = applyStockFilter(allReceived);
 
-  // Count out-of-stock and low-stock across all pending items
   const outCount = allPending.filter(i => { const s = stockMap[i.PartID]; return s && s.qty <= 0; }).length;
   const lowCount = allPending.filter(i => { const s = stockMap[i.PartID]; return s && s.qty > 0 && s.qty <= s.reorder; }).length;
+  const okCount  = allPending.filter(i => { const s = stockMap[i.PartID]; return !s || s.qty > s.reorder; }).length;
 
   const filterPill = (key, label, count, color) => {
     const active = activeFilter === key;
@@ -5786,6 +5789,7 @@ function renderChecklist() {
       ${filterPill('all', 'All', null, 'var(--text2)')}
       ${filterPill('out', '🔴 Out of stock', outCount, 'var(--red)')}
       ${filterPill('low', '🟡 Low stock', lowCount, 'var(--accent)')}
+      ${okCount > 0 ? filterPill('ok', '🟢 In stock', okCount, 'var(--green)') : ''}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:11px;color:var(--text3)">☑ Select parts to order · tap ⟳ to cycle status</div>
@@ -6818,26 +6822,27 @@ function onChecklistPartChange(sel) {
 }
 
 async function autoAddLowStock() {
-  const lowParts = state.parts.filter(p => {
-    const qty = parseInt(p.StockQty)||0;
-    const reorder = parseInt(p.ReorderLevel)||5;
-    const alreadyAdded = state.checklist.some(c => c.PartID === p.PartID);
-    return qty <= reorder && !alreadyAdded;
-  });
-  if (lowParts.length === 0) { toast('All low stock parts already on checklist', 'success'); return; }
+  const alreadyAdded = new Set(state.checklist.map(c => c.PartID));
+  const toAdd = state.parts.filter(p => !alreadyAdded.has(p.PartID));
 
-  toast(`Adding ${lowParts.length} parts...`, 'success');
+  if (toAdd.length === 0) { toast('All parts already on checklist', 'success'); return; }
 
-  const items = lowParts.map(p => {
-    const qty = parseInt(p.StockQty)||0;
+  toast(`Adding ${toAdd.length} parts...`, 'success');
+
+  const items = toAdd.map(p => {
+    const qty    = parseInt(p.StockQty)||0;
     const reorder = parseInt(p.ReorderLevel)||5;
+    // Low/out of stock — High priority, suggest reorder qty
+    // In stock — Normal priority, suggest 0 (no urgent need, just for easy access)
+    const isLow  = qty <= 0;
+    const isNear = qty > 0 && qty <= reorder;
     return {
-      PartID: p.PartID,
-      PartName: p.Name || p.ItemName,
-      TargetQty: reorder,
-      Priority: qty <= 0 ? 'High' : 'Normal',
-      Status: 'Pending',
-      Notes: qty <= 0 ? 'Out of stock' : `Low stock (${qty} left)`
+      PartID:    p.PartID,
+      PartName:  p.Name || p.ItemName,
+      TargetQty: isLow ? reorder : isNear ? (reorder - qty + reorder) : reorder,
+      Priority:  isLow ? 'High' : isNear ? 'Normal' : 'Normal',
+      Status:    'Pending',
+      Notes:     isLow ? 'Out of stock' : isNear ? `Low stock (${qty} left)` : `In stock (${qty})`
     };
   });
 
