@@ -5806,9 +5806,9 @@ function renderChecklist() {
 
   document.getElementById('tx-content').innerHTML =
     summary + selSummaryHtml + emptyFilter +
-    section('📌 To Order', pending, 'Pending') +
     section('⟳ Ordered', ordered, 'Ordered') +
-    section('✓ Received', received, 'Received');
+    section('✓ Received', received, 'Received') +
+    section('📌 To Order', pending, 'Pending');
 }
 
 
