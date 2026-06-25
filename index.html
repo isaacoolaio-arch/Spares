@@ -5658,14 +5658,14 @@ function renderChecklist() {
       if (isPending) {
         html += '<input type="checkbox" ' + (isSelected ? 'checked' : '')
           + ' data-iid="' + i.ItemID + '"'
-          + ' onchange="toggleChecklistSelect(this.getAttribute("data-iid"))"'
+          + ' onchange="toggleChecklistSelect(this.dataset.iid)"'
           + ' style="width:18px;height:18px;accent-color:var(--blue);flex-shrink:0;cursor:pointer" />';
       } else {
         const boxClass = status === 'Ordered' ? 'check-box ordered' : status === 'Received' ? 'check-box checked' : 'check-box';
         const boxIcon  = status === 'Received' ? '✓' : status === 'Ordered' ? '⟳' : '';
         html += '<div class="' + boxClass + '"'
           + ' data-iid="' + i.ItemID + '" data-ist="' + i.Status + '"'
-          + ' onclick="cycleCheckStatus(this.getAttribute("data-iid"),this.getAttribute("data-ist"))">'
+          + ' onclick="cycleCheckStatus(this.dataset.iid,this.dataset.ist)">'
           + boxIcon + '</div>';
       }
 
@@ -5685,7 +5685,7 @@ function renderChecklist() {
       }
 
       html += '<button data-iid="' + i.ItemID + '"'
-        + ' onclick="deleteChecklistItem(this.getAttribute("data-iid"))"'
+        + ' onclick="deleteChecklistItem(this.dataset.iid)"'
         + ' style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0">×</button>';
 
       html += '</div>';
