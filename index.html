@@ -5792,8 +5792,9 @@ function renderChecklist() {
       ${okCount > 0 ? filterPill('ok', '🟢 In stock', okCount, 'var(--green)') : ''}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div style="font-size:11px;color:var(--text3)">☑ Select parts to order · tap ⟳ to cycle status</div>
-      <div style="display:flex;gap:6px">
+      <div style="font-size:11px;color:var(--text3)">☑ Select to order · tap ⟳ to cycle</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        ${allOrdered.length > 0 ? `<button onclick="printOrderedList()" style="background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);color:var(--accent);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">🖨 Print ordered (${allOrdered.length})</button>` : ''}
         ${allReceived.length > 0 ? `<button onclick="clearReceived()" style="background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:var(--green);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">🗑 Clear ${allReceived.length} received</button>` : ''}
         <button onclick="clearAllChecklist()" style="background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.25);color:var(--red);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✕ Clear all</button>
       </div>
@@ -5826,6 +5827,22 @@ function clearChecklistSelection() {
   window._clSelected = new Set();
   window._clQtys = {};
   renderChecklist();
+}
+
+function printOrderedList() {
+  // Print all items currently in Ordered status
+  const orderedItems = state.checklist.filter(i => i.Status === 'Ordered');
+  if (orderedItems.length === 0) { toast('No ordered items to print', 'error'); return; }
+
+  // Temporarily set selection to all ordered items for printing
+  const prev = window._clSelected;
+  window._clSelected = new Set(orderedItems.map(i => i.ItemID));
+  orderedItems.forEach(i => {
+    if (!window._clQtys) window._clQtys = {};
+    if (!window._clQtys[i.ItemID]) window._clQtys[i.ItemID] = parseInt(i.TargetQty)||1;
+  });
+  printChecklistOrder();
+  window._clSelected = prev;
 }
 
 function printChecklistOrder() {
