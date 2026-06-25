@@ -5745,7 +5745,10 @@ function renderChecklist() {
       // Header
       + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
       + '<div style="font-size:13px;font-weight:800;color:var(--blue)">📋 ' + selectedItems.length + ' selected to order</div>'
+      + '<div style="display:flex;gap:8px;align-items:center">'
+      + '<button onclick="printChecklistOrder()" style="background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);color:var(--accent);border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">🖨 Print</button>'
       + '<button onclick="clearChecklistSelection()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;font-family:var(--font)">Clear all</button>'
+      + '</div>'
       + '</div>'
       // Item rows with qty inputs
       + itemRows
@@ -5815,6 +5818,110 @@ function clearChecklistSelection() {
   window._clSelected = new Set();
   window._clQtys = {};
   renderChecklist();
+}
+
+function printChecklistOrder() {
+  const selectedItems = state.checklist.filter(i => window._clSelected && window._clSelected.has(i.ItemID));
+  if (selectedItems.length === 0) { toast('No items selected', 'error'); return; }
+
+  const shop     = state.settings.shopName  || 'Oola Spares';
+  const owner    = state.settings.ownerName || '';
+  const phone    = state.settings.phone     || '';
+  const today    = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+
+  // Group by supplier
+  const bySupplier = {};
+  let grandTotal = 0;
+  selectedItems.forEach(i => {
+    const part = state.parts.find(p => p.PartID === i.PartID) || {};
+    const sup  = part.SupplierName || 'Unknown Supplier';
+    if (!bySupplier[sup]) bySupplier[sup] = [];
+    const qty  = (window._clQtys && window._clQtys[i.ItemID]) ? window._clQtys[i.ItemID] : (parseInt(i.TargetQty)||1);
+    const cost = parseFloat(part.CostPrice) || 0;
+    const amount = cost * qty;
+    grandTotal += amount;
+    bySupplier[sup].push({
+      name: i.PartName,
+      size: part.Size || part.Description || '—',
+      supplier: sup,
+      unitCost: cost,
+      qty,
+      amount
+    });
+  });
+
+  // Build supplier sections
+  let supplierSections = '';
+  Object.entries(bySupplier).forEach(([sup, items]) => {
+    const supTotal = items.reduce((s,i) => s+i.amount, 0);
+    let rows = '';
+    items.forEach((item, idx) => {
+      rows += '<tr style="background:' + (idx%2===0?'#fff':'#f9f9f9') + '">'
+        + '<td style="padding:7px 10px;border:1px solid #ddd">' + item.name + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:center">' + item.size + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:center">' + sup + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:right">' + (item.unitCost > 0 ? 'UGX ' + item.unitCost.toLocaleString() : '—') + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:center;font-weight:700">' + item.qty + '</td>'
+        + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:right;font-weight:700">' + (item.amount > 0 ? 'UGX ' + item.amount.toLocaleString() : '—') + '</td>'
+        + '</tr>';
+    });
+    supplierSections += '<div style="margin-bottom:24px">'
+      + '<div style="background:#1a1a2e;color:#f5a623;padding:6px 10px;font-weight:800;font-size:13px;border-radius:4px 4px 0 0">📦 ' + sup + '</div>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:13px">'
+      + '<thead><tr style="background:#f0f0f0">'
+      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:left">Part Name</th>'
+      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:center">Size/Spec</th>'
+      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:center">Supplier</th>'
+      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:right">Unit Cost</th>'
+      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:center">Qty</th>'
+      + '<th style="padding:7px 10px;border:1px solid #ddd;text-align:right">Amount</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody>'
+      + '<tfoot><tr style="background:#fff8e6">'
+      + '<td colspan="5" style="padding:7px 10px;border:1px solid #ddd;text-align:right;font-weight:800">Subtotal (' + sup + ')</td>'
+      + '<td style="padding:7px 10px;border:1px solid #ddd;text-align:right;font-weight:900;color:#d97706">' + (supTotal > 0 ? 'UGX ' + supTotal.toLocaleString() : '—') + '</td>'
+      + '</tr></tfoot>'
+      + '</table></div>';
+  });
+
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+    + '<title>Purchase Order - ' + shop + '</title>'
+    + '<style>'
+    + 'body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#111}'
+    + '@media print{'
+    + '  body{padding:10px}'
+    + '  .no-print{display:none!important}'
+    + '  button{display:none}'
+    + '}'
+    + '</style></head><body>'
+    // Header
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1a1a2e">'
+    + '<div>'
+    + '<div style="font-size:22px;font-weight:900;color:#1a1a2e">' + shop + '</div>'
+    + (owner ? '<div style="font-size:13px;color:#555">Owner: ' + owner + '</div>' : '')
+    + (phone ? '<div style="font-size:13px;color:#555">Tel: ' + phone + '</div>' : '')
+    + '</div>'
+    + '<div style="text-align:right">'
+    + '<div style="font-size:18px;font-weight:800;color:#d97706">PURCHASE ORDER</div>'
+    + '<div style="font-size:12px;color:#777">Date: ' + today + '</div>'
+    + '<div style="font-size:12px;color:#777">Items: ' + selectedItems.length + ' parts</div>'
+    + '</div></div>'
+    // Supplier sections
+    + supplierSections
+    // Grand total
+    + '<div style="margin-top:16px;padding:12px 16px;background:#1a1a2e;color:#fff;border-radius:8px;display:flex;justify-content:space-between;align-items:center">'
+    + '<div style="font-size:15px;font-weight:800">GRAND TOTAL</div>'
+    + '<div style="font-size:20px;font-weight:900;color:#f5a623">' + (grandTotal > 0 ? 'UGX ' + grandTotal.toLocaleString() : '—') + '</div>'
+    + '</div>'
+    // Print buttons
+    + '<div class="no-print" style="margin-top:20px;display:flex;gap:10px;justify-content:center">'
+    + '<button onclick="window.print()" style="background:#1a1a2e;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🖨 Print / Save as PDF</button>'
+    + '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">✕ Close</button>'
+    + '</div>'
+    + '</body></html>';
+
+  const win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write(html);
+  win.document.close();
 }
 
 function updateChecklistQty(itemId, qty) {
