@@ -220,13 +220,12 @@ function verifyPin(data) {
 
 function getUsers(data) {
   const settings = getSettingsMap();
-  return { success: true, data: {
-    adminName: settings.adminName || 'Admin',
-    user1Name: settings.user1Name || '',
-    user2Name: settings.user2Name || '',
-    user1HasPin: !!(settings.user1Pin),
-    user2HasPin: !!(settings.user2Pin),
-  }};
+  const result = { adminName: settings.adminName || 'Admin' };
+  for (var i = 1; i <= 5; i++) {
+    result['user'+i+'Name']   = settings['user'+i+'Name'] || '';
+    result['user'+i+'HasPin'] = !!(settings['user'+i+'Pin']);
+  }
+  return { success: true, data: result };
 }
 
 // Called by ADMIN to generate OTP (optionally emails it to themselves too)
@@ -451,7 +450,9 @@ function saveSettings(data) {
   const sheet = ss.getSheetByName(SHEETS.SETTINGS);
   const rows = sheet.getDataRange().getValues();
   const keys = ['shopName', 'pin', 'currency', 'ownerName', 'phone', 'adminEmail',
-                 'adminName', 'user1Name', 'user1Pin', 'user2Name', 'user2Pin'];
+                 'adminName',
+                 'user1Name', 'user1Pin', 'user2Name', 'user2Pin',
+                 'user3Name', 'user3Pin', 'user4Name', 'user4Pin', 'user5Name', 'user5Pin'];
   keys.forEach(key => {
     if (data[key] !== undefined) {
       let found = false;
