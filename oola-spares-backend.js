@@ -1555,6 +1555,7 @@ function updateChecklistStatus(data) {
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === data.ItemID) {
       sheet.getRange(i + 1, 5).setValue(data.Status);
+      if (data.TargetQty) sheet.getRange(i + 1, 4).setValue(data.TargetQty);
       sheet.getRange(i + 1, 8).setValue(now);
       return { success: true };
     }
