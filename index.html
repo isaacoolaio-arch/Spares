@@ -5642,7 +5642,8 @@ function renderChecklist() {
     const bulkBtn = isPending
       ? '<button onclick="markAllOrdered()" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:var(--blue);border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">⟳ Mark all ordered</button>'
       : '';
-    let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px">'
+    const sectionId = status === 'Pending' ? 'cl-section-pending' : status === 'Ordered' ? 'cl-section-ordered' : 'cl-section-received';
+    let html = '<div id="' + sectionId + '" style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px">'
       + '<div class="section-label" style="margin:0">' + title + ' <span style="color:var(--text3);font-weight:500;font-size:12px">(' + list.length + ')</span></div>'
       + bulkBtn + '</div>';
 
@@ -5772,17 +5773,17 @@ function renderChecklist() {
   // ── STAT CARDS + FILTER PILLS ──
   const summary = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
-      <div class="stat-card" style="text-align:center;padding:10px">
+      <div class="stat-card" onclick="scrollToChecklistSection('pending')" style="text-align:center;padding:10px;cursor:pointer">
         <div style="font-size:18px;font-weight:900;color:var(--red)">${allPending.length}</div>
         <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">To Order</div>
       </div>
-      <div class="stat-card" style="text-align:center;padding:10px">
+      <div class="stat-card" onclick="scrollToChecklistSection('ordered')" style="text-align:center;padding:10px;cursor:pointer;${allOrdered.length > 0 ? 'box-shadow:0 0 0 2px var(--blue);' : ''}">
         <div style="font-size:18px;font-weight:900;color:var(--blue)">${allOrdered.length}</div>
-        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Ordered</div>
+        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Ordered ↓</div>
       </div>
-      <div class="stat-card" style="text-align:center;padding:10px">
+      <div class="stat-card" onclick="scrollToChecklistSection('received')" style="text-align:center;padding:10px;cursor:pointer;${allReceived.length > 0 ? 'box-shadow:0 0 0 2px var(--green);' : ''}">
         <div style="font-size:18px;font-weight:900;color:var(--green)">${allReceived.length}</div>
-        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Received</div>
+        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Received ↓</div>
       </div>
     </div>
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
@@ -5810,6 +5811,20 @@ function renderChecklist() {
     section('✓ Received', received, 'Received');
 }
 
+
+function scrollToChecklistSection(section) {
+  const id = section === 'pending' ? 'cl-section-pending'
+           : section === 'ordered' ? 'cl-section-ordered'
+           : 'cl-section-received';
+  // Switch to All filter first so section is visible
+  window._clFilter = 'all';
+  renderChecklist();
+  // Small delay to let render complete, then scroll
+  setTimeout(() => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 80);
+}
 
 function setChecklistFilter(f) {
   window._clFilter = f;
