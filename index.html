@@ -5675,7 +5675,7 @@ function renderChecklist() {
         + '<div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + i.PartName + stockBadge + '</div>'
         + '<div style="font-size:11px;color:var(--text3);margin-top:2px">'
         + 'Qty: ' + i.TargetQty
-        + (cost > 0 ? ' &nbsp;·&nbsp; <span style="color:var(--text2)">UGX ' + cost.toLocaleString() + '/each</span>' : '')
+        + ''
         + (supplier ? ' &nbsp;·&nbsp; ' + supplier : '')
         + '</div></div>';
 
@@ -5695,10 +5695,11 @@ function renderChecklist() {
             + '</div>'
             + (runningCost > 0 ? '<div style="font-size:12px;font-weight:800;color:var(--accent)">UGX ' + runningCost.toLocaleString() + '</div>' : '')
             + '</div>';
-        } else if (totalCost > 0) {
-          html += '<div style="text-align:right;flex-shrink:0;min-width:70px">'
-            + '<div style="font-size:13px;font-weight:800;color:var(--accent)">UGX ' + totalCost.toLocaleString() + '</div>'
-            + '<div style="font-size:10px;color:var(--text3)">total</div>'
+        } else if (cost > 0) {
+          // Unselected — show unit price as a tap hint
+          html += '<div style="text-align:right;flex-shrink:0">'
+            + '<div style="font-size:12px;font-weight:700;color:var(--text3)">UGX ' + cost.toLocaleString() + '</div>'
+            + '<div style="font-size:10px;color:var(--text3)">per unit</div>'
             + '</div>';
         }
       }
