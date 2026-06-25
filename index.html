@@ -824,32 +824,15 @@ function handleBulkPhotoSelect(event) {
     const reader = new FileReader();
     reader.onload = e => {
       // Compress before storing
-      const img = new Image();
-      img.onload = () => {
-        const MAX = 600;
-        let w = img.width, h = img.height;
-        if (w > MAX || h > MAX) {
-          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-          else        { w = Math.round(w * MAX / h); h = MAX; }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        let quality = 0.7, dataUrl = canvas.toDataURL('image/jpeg', quality);
-        while (dataUrl.length > 150000 && quality > 0.15) {
-          quality -= 0.1;
-          dataUrl = canvas.toDataURL('image/jpeg', quality);
-        }
+      compressImage(e.target.result).then(({dataUrl}) => {
         _bulkPhotos[idx].dataUrl = dataUrl;
         loaded++;
         if (loaded === files.length) renderBulkPhotoGrid();
-      };
-      img.onerror = () => {
+      }).catch(() => {
         _bulkPhotos[idx].dataUrl = e.target.result;
         loaded++;
         if (loaded === files.length) renderBulkPhotoGrid();
-      };
-      img.src = e.target.result;
+      });
     };
     reader.readAsDataURL(photo.file);
   });
@@ -1206,7 +1189,12 @@ function capturePartPhoto(partId) {
   canvas.style.display='block';
   if(_imgStream){_imgStream.getTracks().forEach(t=>t.stop());_imgStream=null;}
   document.getElementById('img-camera-wrap').style.display='none';
-  savePartImageUrl(partId, canvas.toDataURL('image/jpeg', 0.75));
+  // Compress before saving
+  toast('Compressing photo...', 'success');
+  compressImage(canvas.toDataURL('image/jpeg', 0.92)).then(({dataUrl, kb, quality}) => {
+    console.log('Camera photo: ' + kb + 'KB at q' + quality);
+    savePartImageUrl(partId, dataUrl);
+  });
 }
 function handlePartImageUpload(event, partId) {
   const file = event.target.files[0];
@@ -1214,35 +1202,56 @@ function handlePartImageUpload(event, partId) {
   toast('Compressing photo...', 'success');
   const reader = new FileReader();
   reader.onload = e => {
-    const img = new Image();
-    img.onload = () => {
-      // Resize to max 600px — enough for a parts catalogue thumbnail
-      const MAX = 600;
-      let w = img.width, h = img.height;
-      if (w > MAX || h > MAX) {
-        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-        else        { w = Math.round(w * MAX / h); h = MAX; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      // Target under 150KB base64 (~110KB actual) — safe for Apps Script POST
-      let quality = 0.7;
-      let dataUrl = canvas.toDataURL('image/jpeg', quality);
-      while (dataUrl.length > 150000 && quality > 0.15) {
-        quality -= 0.1;
-        dataUrl = canvas.toDataURL('image/jpeg', quality);
-      }
-      const kb = Math.round(dataUrl.length * 0.75 / 1024);
-      toast(`Photo compressed to ${kb}KB — uploading...`, 'success');
-      console.log(`Compressed to ${kb}KB at quality ${quality.toFixed(1)}`);
+    compressImage(e.target.result).then(({dataUrl, kb, quality}) => {
+      toast('Photo compressed to ' + kb + 'KB ✓', 'success');
+      console.log('File upload: ' + kb + 'KB at q' + quality);
       savePartImageUrl(partId, dataUrl);
-    };
-    img.onerror = () => savePartImageUrl(partId, e.target.result);
-    img.src = e.target.result;
+    });
   };
   reader.readAsDataURL(file);
 }
+// ── IMAGE COMPRESSION UTILITY ──
+// Resizes and compresses any image to a consistent size for storage/upload
+// Target: max 800px longest side, max 200KB base64 (~150KB actual file)
+// Returns: compressed dataUrl + stats
+function compressImage(sourceDataUrl, opts = {}) {
+  return new Promise((resolve) => {
+    const MAX_DIM     = opts.maxDim     || 800;   // max width or height in px
+    const MAX_B64     = opts.maxBytes   || 200000; // max base64 string length (~150KB)
+    const START_Q     = opts.quality    || 0.82;   // start quality
+    const MIN_Q       = 0.15;
+
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth  || img.width;
+      let h = img.naturalHeight || img.height;
+
+      // Scale down if needed
+      if (w > MAX_DIM || h > MAX_DIM) {
+        if (w >= h) { h = Math.round(h * MAX_DIM / w); w = MAX_DIM; }
+        else         { w = Math.round(w * MAX_DIM / h); h = MAX_DIM; }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+
+      // Iteratively reduce quality until under size limit
+      let quality = START_Q;
+      let dataUrl = canvas.toDataURL('image/jpeg', quality);
+      while (dataUrl.length > MAX_B64 && quality > MIN_Q) {
+        quality = Math.max(MIN_Q, quality - 0.08);
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+
+      const kb = Math.round(dataUrl.length * 0.75 / 1024);
+      resolve({ dataUrl, kb, quality: Math.round(quality * 100), w, h });
+    };
+    img.onerror = () => resolve({ dataUrl: sourceDataUrl, kb: 0, quality: 0, w: 0, h: 0 });
+    img.src = sourceDataUrl;
+  });
+}
+
 async function savePartImageUrl(partId, dataUrl) {
   toast('Uploading photo...', 'success');
 
