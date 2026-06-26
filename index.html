@@ -3730,7 +3730,7 @@ function markBpeDirty(inp) {
 }
 
 async function saveBulkPrices() {
-  const inputs = document.querySelectorAll('#modal-content input[data-pid]');
+  const inputs = document.querySelectorAll('#modal-body input[data-pid]');
   const dirtyOnly = Array.from(inputs).filter(i => i.dataset.dirty === '1');
   if (dirtyOnly.length === 0) { toast('No changes — type new prices first', 'error'); return; }
   const changes = {};
@@ -3751,15 +3751,11 @@ async function saveBulkPrices() {
   for (const [pid, vals] of toSave) {
     const part = state.parts.find(p => p.PartID === pid);
     if (!part) continue;
-    // Only save if value changed
-    const costChanged = vals.cost > 0 && vals.cost !== (parseFloat(part.CostPrice)||0);
-    const sellChanged = vals.sell > 0 && vals.sell !== (parseFloat(part.SellingPrice)||0);
-    if (!costChanged && !sellChanged) continue;
-
+    // Save whatever was typed — user explicitly marked these as dirty
     const updatedPart = {
       ...part,
-      CostPrice:    vals.cost   > 0 ? vals.cost   : (parseFloat(part.CostPrice)||0),
-      SellingPrice: vals.sell   > 0 ? vals.sell   : (parseFloat(part.SellingPrice)||0),
+      CostPrice:    vals.cost   !== undefined ? vals.cost   : (parseFloat(part.CostPrice)||0),
+      SellingPrice: vals.sell   !== undefined ? vals.sell   : (parseFloat(part.SellingPrice)||0),
     };
     try {
       await api('savePart', updatedPart);
