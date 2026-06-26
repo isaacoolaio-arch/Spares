@@ -166,7 +166,7 @@
       align-items: center; justify-content: center; gap: 3px;
       cursor: pointer; color: var(--text3); transition: color .2s;
       font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
-      position: relative;
+      position: relative; padding: 0 6px;
     }
     .nav-item .nav-icon { font-size: 19px; transition: transform .2s; }
     .nav-item.active { color: var(--accent); }
@@ -495,9 +495,9 @@
   </div>
 
   <!-- Copyright inside login screen -->
-  <div style="margin-top:auto;padding:20px 0 12px;text-align:center;font-size:11px;color:var(--text3);line-height:1.8">
-    © 2025 <strong style="color:var(--text2)">Oola Spares</strong> — <strong style="color:var(--accent)">Isaac Oola</strong><br>
-    Okum Energy Group · Gulu, Uganda · All rights reserved
+  <div style="margin-top:auto;padding:20px 0 16px;text-align:center;font-size:13px;color:var(--text3);line-height:1.9">
+    © 2025 <strong style="color:var(--text2);font-size:14px">Oola Spares</strong> — <strong style="color:var(--accent)">Isaac Oola</strong><br>
+    <span style="font-size:12px">Okum Energy Group · Gulu, Uganda · All rights reserved</span>
   </div>
 
   <!-- Step 2: PIN entry (shown after user selected) -->
@@ -8007,20 +8007,6 @@ function showSettings() {
             <button class="btn btn-primary" onclick="saveAllSettings()">💾 Save All</button>
     </div>
 
-    <!-- COPYRIGHT -->
-    <div style="border-top:1px solid var(--border);padding-top:16px;text-align:center">
-      <div style="font-size:11px;color:var(--text3);line-height:1.8">
-        <div style="font-size:18px;margin-bottom:6px">🔧</div>
-        <div style="font-size:13px;font-weight:800;color:var(--text)">Oola Spares</div>
-        <div style="font-size:11px;color:var(--text3)">Motorcycle Parts Manager</div>
-        <div style="margin-top:8px;font-size:11px;color:var(--text3)">
-          Developed by <span style="color:var(--accent);font-weight:700">Isaac Oola</span><br>
-          Okum Energy Group · Gulu, Uganda<br>
-          <span style="color:var(--text3)">© 2025 All rights reserved</span>
-        </div>
-      </div>
-    </div>
-
     <!-- DATA TOOLS — admin only -->
     <div style="border-top:1px solid var(--border);padding-top:16px">
       <div class="card-title" style="margin-bottom:10px">Data Tools</div>
@@ -8080,6 +8066,13 @@ function showSettings() {
       border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.08);
       color:#3b82f6;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer
     ">🔌 Test Server Connection</button>
+  <div style="position:sticky;bottom:-36px;background:var(--surface);border-top:1px solid var(--border);padding:10px 0 8px;text-align:center;margin:16px -16px -36px;z-index:5">
+    <div style="font-size:12px;color:var(--text3);line-height:1.8">
+      <span style="font-size:13px;font-weight:800;color:var(--text)">🔧 Oola Spares</span><br>
+      Developed by <span style="color:var(--accent);font-weight:700">Isaac Oola</span> · Okum Energy Group · Gulu, Uganda<br>
+      <span style="font-size:11px">© 2025 All rights reserved</span>
+    </div>
+  </div>
     `}
   `);
 }
