@@ -2666,6 +2666,13 @@ function renderDashboard() {
         <span style="font-size:24px">📦</span>
         <span style="font-size:11px;font-weight:800;color:#3b82f6;font-family:var(--font)">Add Stock</span>
       </button>
+      <button onclick="openStockAlert()" style="
+        padding:14px 8px;border-radius:14px;border:1px solid rgba(239,68,68,.3);
+        background:rgba(239,68,68,.1);cursor:pointer;text-align:center;
+        display:flex;flex-direction:column;align-items:center;gap:4px">
+        <span style="font-size:24px">⚠️</span>
+        <span style="font-size:11px;font-weight:800;color:var(--red);font-family:var(--font)">Stock Alert</span>
+      </button>
 
     </div>
 
@@ -5989,6 +5996,20 @@ function scrollToChecklistSection(section) {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 80);
+}
+
+function openStockAlert() {
+  // Navigate to Records > Checklist filtered to out/low stock
+  window._clFilter = 'out'; // start with out of stock
+  showView('transactions', document.getElementById('nav-transactions'));
+  state.currentTxTab = 'checklist';
+  setTimeout(() => {
+    switchTxTab('checklist');
+    // If checklist is empty auto-add low stock parts
+    if (state.checklist.length === 0) {
+      autoAddLowStock();
+    }
+  }, 100);
 }
 
 function setChecklistFilter(f) {
