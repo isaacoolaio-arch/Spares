@@ -2718,15 +2718,45 @@ function renderDashboard() {
     </div>`;
   }
 
-  if (lowStock.length > 0) {
-    html += `<div class="alert-strip">
-      <h4>⚠️ Low Stock Alert</h4>
-      ${lowStock.slice(0,4).map(p => `
-        <div class="alert-item">
-          <span>${p.Name}</span>
-          <span>${p.StockQty} left (min ${p.ReorderLevel||5})</span>
+  // ── TOP SELLING PARTS (last 30 sales) ──
+  const salesCount = {};
+  state.sales.slice(-60).forEach(s => {
+    if (!s.PartName) return;
+    salesCount[s.PartName] = (salesCount[s.PartName]||0) + (parseInt(s.Qty)||1);
+  });
+  const topParts = Object.entries(salesCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  if (topParts.length > 0) {
+    const maxVal = topParts[0][1];
+    html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="section-label" style="margin:0">🔥 Top Selling Parts</div>
+        <div style="font-size:11px;color:var(--text3)">last 60 sales</div>
+      </div>
+      ${topParts.map(([name,qty]) => `
+        <div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:12px;font-weight:700;color:var(--text)">${name}</span>
+            <span style="font-size:12px;font-weight:800;color:var(--accent)">${qty} sold</span>
+          </div>
+          <div style="background:var(--surface2);border-radius:4px;height:5px;overflow:hidden">
+            <div style="background:var(--accent);height:5px;border-radius:4px;width:${Math.round(qty/maxVal*100)}%;transition:width .4s"></div>
+          </div>
         </div>`).join('')}
-      ${lowStock.length>4?`<div class="alert-item"><span style="color:var(--accent)">+${lowStock.length-4} more...</span></div>`:''}
+    </div>`;
+  } else if (lowStock.length > 0) {
+    // Fallback to low stock if no sales yet
+    html += `<div style="background:var(--surface);border:1px solid rgba(239,68,68,.25);border-radius:14px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="section-label" style="margin:0;color:var(--red)">⚠️ Critical Stock</div>
+        <button onclick="openStockAlert()" style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;font-family:var(--font);font-weight:700">View all →</button>
+      </div>
+      ${lowStock.slice(0,4).map(p => `
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:13px;font-weight:700">${p.Name}</span>
+          <span style="font-size:12px;color:var(--red);font-weight:700">${p.StockQty} left</span>
+        </div>`).join('')}
+      ${lowStock.length>4?`<div style="text-align:center;margin-top:8px"><button onclick="openStockAlert()" style="font-size:12px;color:var(--accent);background:none;border:none;cursor:pointer;font-family:var(--font);font-weight:700">+${lowStock.length-4} more — View all</button></div>`:''}
     </div>`;
   }
 
