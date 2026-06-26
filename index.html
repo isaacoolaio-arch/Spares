@@ -1720,9 +1720,13 @@ async function applyLocalWrite(action, data) {
     return { success: true };
   }
   if (action === 'saveSettings') {
+    // Merge into settings state
+    state.settings = { ...state.settings, ...data };
     for (const [key, value] of Object.entries(data)) {
       try { await IDB.set(key, value); } catch(e) {}
     }
+    // Update snapshot so login screen shows correct users even after SW update
+    try { await IDB.set('__settings_snapshot__', JSON.stringify(state.settings)); } catch(e) {}
     return { success: true };
   }
   if (action === 'savePartImage') {
@@ -2416,6 +2420,16 @@ async function initApp() {
   // Set online/offline indicator
   updateOnlineStatus();
 
+  // ── FAST LOGIN SCREEN: load cached settings immediately so users appear before network ──
+  try {
+    const snap = await IDB.get('__settings_snapshot__');
+    if (snap) {
+      const cached = JSON.parse(snap);
+      state.settings = cached;
+      refreshLoginUserNames();
+    }
+  } catch(e) {}
+
   // Load all data (smartApi handles online/offline automatically)
   await loadAll();
   renderDashboard();
@@ -2532,6 +2546,8 @@ async function loadAll() {
         for (const [key, value] of Object.entries(state.settings)) {
           try { await IDB.set(key, value); } catch(e) {}
         }
+        // Also persist full settings object as a single key for fast startup
+        try { await IDB.set('__settings_snapshot__', JSON.stringify(state.settings)); } catch(e) {}
       }
 
       console.log('loadAll synced:', {
