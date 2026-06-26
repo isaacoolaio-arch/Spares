@@ -576,7 +576,8 @@
         <input type="text" id="parts-search" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" placeholder="Search parts..." oninput="filterParts()" />
       </div>
       <!-- Filter dropdowns row -->
-      <div style="display:flex;gap:6px;margin-bottom:10px" id="parts-filter-row">
+      <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center" id="parts-filter-row">
+        <button onclick="showBulkPriceModal()" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(168,85,247,.4);background:rgba(168,85,247,.1);color:#a855f7;font-family:var(--font);font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;white-space:nowrap">⚡ Bulk Price</button>
         <!-- Status -->
         <div style="position:relative;flex:1;min-width:0">
           <button onclick="togglePartsDropdown('pd-status')" id="pd-status-btn" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:4px">
@@ -3659,6 +3660,110 @@ function applyAllSameSell() {
   renderWizard();
 }
 
+function showBulkPriceModal(filterNoPriceOnly = false) {
+  // Build editable list — no price parts first, then rest sorted by name
+  let parts = [...state.parts].sort((a,b) => {
+    const aCost = parseFloat(a.CostPrice)||0;
+    const bCost = parseFloat(b.CostPrice)||0;
+    if (!aCost && bCost) return -1;
+    if (aCost && !bCost) return 1;
+    return (a.Name||a.ItemName||'').localeCompare(b.Name||b.ItemName||'');
+  });
+  if (filterNoPriceOnly) parts = parts.filter(p => !(parseFloat(p.CostPrice) > 0));
+
+  const rows = parts.map(p => {
+    const name    = p.Name || p.ItemName || '';
+    const size    = p.Size ? ' · ' + p.Size : '';
+    const cost    = parseFloat(p.CostPrice)   || 0;
+    const sell    = parseFloat(p.SellingPrice) || 0;
+    const noCost  = cost === 0;
+    return '<tr id="bpe-row-' + p.PartID + '">'
+      + '<td style="padding:6px 8px;font-size:12px;font-weight:700;border-bottom:1px solid var(--border);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + name + '">'
+      + (noCost ? '<span style="color:#a855f7;font-size:10px">⚠ </span>' : '')
+      + name + '<span style="color:var(--text3);font-weight:400">' + size + '</span></td>'
+      + '<td style="padding:6px 4px;border-bottom:1px solid var(--border)">'
+      + '<input type="number" data-pid="' + p.PartID + '" data-field="cost" value="' + (cost||'') + '" placeholder="Cost" min="0"'
+      + ' style="width:90px;padding:4px 6px;border-radius:6px;border:1px solid ' + (noCost?'#a855f7':'var(--border2)') + ';background:var(--surface2);color:var(--text);font-size:12px;font-family:var(--font)" /></td>'
+      + '<td style="padding:6px 4px;border-bottom:1px solid var(--border)">'
+      + '<input type="number" data-pid="' + p.PartID + '" data-field="sell" value="' + (sell||'') + '" placeholder="Selling" min="0"'
+      + ' style="width:90px;padding:4px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:var(--font)" /></td>'
+      + '</tr>';
+  }).join('');
+
+  showModal(`
+    <div class="modal-header">
+      <div class="modal-title">⚡ Bulk Price Editor</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:12px;color:var(--text3)">${parts.length} parts · <span style="color:#a855f7">⚠ = missing price</span></span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;margin-left:auto">
+        <input type="checkbox" id="bpe-noprice-only" onchange="showBulkPriceModal(this.checked)" ${filterNoPriceOnly?'checked':''} />
+        Show missing only
+      </label>
+    </div>
+    <div style="max-height:55vh;overflow-y:auto;border:1px solid var(--border);border-radius:10px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead style="position:sticky;top:0;background:var(--surface2);z-index:1">
+          <tr>
+            <th style="padding:8px;font-size:11px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">Part Name</th>
+            <th style="padding:8px 4px;font-size:11px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">Cost Price</th>
+            <th style="padding:8px 4px;font-size:11px;text-align:left;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">Selling Price</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveBulkPrices()">💾 Save All Changes</button>
+      <button class="btn" onclick="closeModal()">Cancel</button>
+    </div>
+  `, 'large');
+}
+
+async function saveBulkPrices() {
+  const inputs = document.querySelectorAll('#modal-content input[data-pid]');
+  const changes = {};
+  inputs.forEach(inp => {
+    const pid   = inp.dataset.pid;
+    const field = inp.dataset.field;
+    const val   = parseFloat(inp.value) || 0;
+    if (!changes[pid]) changes[pid] = {};
+    changes[pid][field] = val;
+  });
+
+  // Only save parts that have at least one price set
+  const toSave = Object.entries(changes).filter(([pid, vals]) => vals.cost > 0 || vals.sell > 0);
+  if (toSave.length === 0) { toast('No prices to save', 'error'); return; }
+
+  toast('Saving ' + toSave.length + ' parts...', 'success');
+  let saved = 0;
+  for (const [pid, vals] of toSave) {
+    const part = state.parts.find(p => p.PartID === pid);
+    if (!part) continue;
+    // Only save if value changed
+    const costChanged = vals.cost > 0 && vals.cost !== (parseFloat(part.CostPrice)||0);
+    const sellChanged = vals.sell > 0 && vals.sell !== (parseFloat(part.SellingPrice)||0);
+    if (!costChanged && !sellChanged) continue;
+
+    const updatedPart = {
+      ...part,
+      CostPrice:    vals.cost   > 0 ? vals.cost   : (parseFloat(part.CostPrice)||0),
+      SellingPrice: vals.sell   > 0 ? vals.sell   : (parseFloat(part.SellingPrice)||0),
+    };
+    try {
+      await api('savePart', updatedPart);
+      part.CostPrice    = updatedPart.CostPrice;
+      part.SellingPrice = updatedPart.SellingPrice;
+      saved++;
+    } catch(e) {}
+  }
+
+  closeModal();
+  toast('✓ Updated ' + saved + ' parts', 'success');
+  if (state.currentView === 'parts') filterParts();
+}
+
 function showEditPartModal(partId) {
   const p = state.parts.find(x => x.PartID === partId);
   if (!p) return;
@@ -5825,6 +5930,7 @@ function renderChecklist() {
       ${filterPill('low', '🟡 Low stock', lowCount, 'var(--accent)')}
       ${okCount > 0 ? filterPill('ok', '🟢 In stock', okCount, 'var(--green)') : ''}
       ${noPriceCount > 0 ? filterPill('noprice', '⚠ No price', noPriceCount, '#a855f7') : ''}
+      ${activeFilter === 'noprice' && noPriceCount > 0 ? '<button onclick="showBulkPriceModal(true)" style="padding:5px 11px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--font);border:1px solid #a855f7;background:rgba(168,85,247,.15);color:#a855f7">⚡ Fix all prices</button>' : ''}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:11px;color:var(--text3)">☑ Select to order · tap ⟳ to cycle</div>
@@ -8020,8 +8126,10 @@ function logoutUser() {
 // ============================================================
 // MODAL HELPERS
 // ============================================================
-function showModal(html) {
-  document.getElementById('modal-body').innerHTML = html;
+function showModal(html, size) {
+  const body = document.getElementById('modal-body');
+  body.innerHTML = html;
+  body.style.maxHeight = size === 'large' ? '96vh' : '92vh';
   document.getElementById('modal-overlay').style.display = 'flex';
 }
 
