@@ -6190,115 +6190,173 @@ function expPinKey(k) {
   }
 }
 
-function showAddExpenseModal(existing) {
+// ── FULL-SCREEN EXPENSE ENTRY (Okum Energy style) ──
+function openExpenseEntry(existing) {
   const e = existing || {};
   const today = new Date().toISOString().split('T')[0];
-  showModal(`
-    <div class="modal-header">
-      <div class="modal-title">💸 ${e.ExpenseID ? 'Edit' : 'New'} Expense</div>
-      <button class="modal-close" onclick="closeModal()">✕</button>
+  const isEdit = !!(e.ExpenseID);
+
+  // Build full-screen overlay
+  let overlay = document.getElementById('expense-entry-overlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'expense-entry-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:2000;display:flex;flex-direction:column;overflow:hidden';
+
+  overlay.innerHTML = `
+    <!-- Header -->
+    <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <button onclick="closeExpenseEntry()" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;padding:0;line-height:1">‹</button>
+      <div style="flex:1">
+        <div style="font-size:17px;font-weight:900;color:var(--text)">${isEdit ? 'Edit Expense' : 'Record Expense'}</div>
+        <div style="font-size:11px;color:var(--text3)">Track business costs</div>
+      </div>
+      ${isEdit ? `<button onclick="deleteExpenseEntry('${e.ExpenseID}')" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">🗑 Delete</button>` : ''}
     </div>
 
-    <!-- Amount — big and prominent like Okum Energy -->
-    <div style="background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(168,85,247,.04));border:1px solid rgba(168,85,247,.25);border-radius:16px;padding:20px;margin-bottom:16px;text-align:center">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Amount (UGX)</div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:6px">
-        <span style="font-size:18px;font-weight:700;color:var(--text3)">UGX</span>
-        <input id="exp-amt" type="number" min="0" value="${e.Amount||''}" placeholder="0"
-          style="border:none;background:transparent;font-size:36px;font-weight:900;color:#a855f7;
-          font-family:var(--font);width:180px;text-align:center;outline:none;-moz-appearance:textfield"
-          oninput="this.style.color=this.value>0?'#a855f7':'var(--text3)'" />
+    <!-- Form body -->
+    <div style="flex:1;overflow-y:auto;padding:16px">
+
+      <!-- Amount — big prominent field -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:14px;text-align:center">
+        <div style="font-size:12px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Amount (UGX)</div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+          <span style="font-size:20px;font-weight:800;color:var(--text3)">UGX</span>
+          <input id="exp-amt" type="number" inputmode="numeric" value="${e.Amount||''}" placeholder="0"
+            style="font-size:36px;font-weight:900;color:var(--red);background:none;border:none;outline:none;font-family:var(--font);width:200px;text-align:center" />
+        </div>
+      </div>
+
+      <!-- Category pills -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;color:var(--text3);font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Category</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px" id="exp-cat-pills">
+          ${EXPENSE_CATEGORIES.map(cat => {
+            const active = e.Category === cat;
+            return `<button onclick="selectExpenseCat(this,'${cat}')"
+              data-cat="${cat}"
+              style="padding:7px 13px;border-radius:20px;border:1px solid ${active?'var(--accent)':'var(--border)'};
+                background:${active?'rgba(240,165,0,.15)':'var(--surface2)'};
+                color:${active?'var(--accent)':'var(--text2)'};
+                font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer">
+              ${cat}
+            </button>`;
+          }).join('')}
+        </div>
+        <input type="hidden" id="exp-cat" value="${e.Category||''}" />
+      </div>
+
+      <!-- Description -->
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Description</label>
+        <input id="exp-desc" value="${e.Description||''}" placeholder="e.g. Monthly rent payment, Kennedy salary..."
+          style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:14px;box-sizing:border-box" />
+      </div>
+
+      <!-- Date + Paid By row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div>
+          <label style="display:block;font-size:12px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Date</label>
+          <input id="exp-date" type="date" value="${e.Date||today}"
+            style="width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;box-sizing:border-box" />
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Paid By</label>
+          <select id="exp-paid" style="width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;box-sizing:border-box">
+            <option ${e.PaidBy==='Cash'||!e.PaidBy?'selected':''}>Cash</option>
+            <option ${e.PaidBy==='Mobile Money'?'selected':''}>Mobile Money</option>
+            <option ${e.PaidBy==='Bank'?'selected':''}>Bank</option>
+            <option ${e.PaidBy==='Credit'?'selected':''}>Credit</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div style="margin-bottom:80px">
+        <label style="display:block;font-size:12px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Notes (optional)</label>
+        <textarea id="exp-notes" rows="2" placeholder="Any additional notes..."
+          style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;box-sizing:border-box;resize:none">${e.Notes||''}</textarea>
       </div>
     </div>
 
-    <!-- Category pills -->
-    <div style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:8px">Category *</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px" id="exp-cat-pills">
-        ${EXPENSE_CATEGORIES.map(c => {
-          const sel = (e.Category||EXPENSE_CATEGORIES[0]) === c;
-          return '<button type="button" onclick="selectExpCat(this,\''+c+'\')" style="padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);border:1px solid '+(sel?'#a855f7':'var(--border)')+';background:'+(sel?'rgba(168,85,247,.15)':'var(--surface2)')+';color:'+(sel?'#a855f7':'var(--text3)')+'">'+c+'</button>';
-        }).join('')}
-      </div>
-      <input type="hidden" id="exp-cat" value="${e.Category||EXPENSE_CATEGORIES[0]}" />
+    <!-- Fixed save button at bottom -->
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 16px;background:var(--surface);border-top:1px solid var(--border)">
+      <button onclick="saveExpenseEntry('${e.ExpenseID||''}')"
+        style="width:100%;padding:15px;border-radius:14px;background:var(--accent);border:none;color:#000;font-family:var(--font);font-size:16px;font-weight:900;cursor:pointer;letter-spacing:.2px">
+        💾 ${isEdit ? 'Update' : 'Save'} Expense
+      </button>
     </div>
+  `;
 
-    <!-- Description -->
-    <label>Description</label>
-    <input id="exp-desc" value="${e.Description||''}" placeholder="e.g. March rent, Kennedy salary, Fuel..." style="margin-bottom:10px" />
-
-    <!-- Date + Paid By side by side -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div>
-        <label>Date</label>
-        <input id="exp-date" type="date" value="${e.Date||today}" />
-      </div>
-      <div>
-        <label>Paid By</label>
-        <input id="exp-paid" value="${e.PaidBy||''}" placeholder="Cash / MoMo..." />
-      </div>
-    </div>
-
-    <label>Notes <span style="font-size:11px;color:var(--text3);font-weight:400">(optional)</span></label>
-    <input id="exp-notes" value="${e.Notes||''}" placeholder="Additional details..." style="margin-bottom:16px" />
-
-    <input type="hidden" id="exp-id" value="${e.ExpenseID||''}" />
-
-    <button class="btn btn-primary" onclick="saveExpenseForm()" style="background:#a855f7;border-color:#a855f7">
-      💾 ${e.ExpenseID ? 'Update' : 'Record'} Expense
-    </button>
-  `);
+  document.body.appendChild(overlay);
+  // Focus amount field
+  setTimeout(() => {
+    const amt = document.getElementById('exp-amt');
+    if (amt) amt.focus();
+  }, 100);
 }
 
-function selectExpCat(btn, cat) {
-  document.getElementById('exp-cat').value = cat;
+function selectExpenseCat(btn, cat) {
   document.querySelectorAll('#exp-cat-pills button').forEach(b => {
-    const active = b === btn;
-    b.style.borderColor  = active ? '#a855f7' : 'var(--border)';
-    b.style.background   = active ? 'rgba(168,85,247,.15)' : 'var(--surface2)';
-    b.style.color        = active ? '#a855f7' : 'var(--text3)';
+    b.style.background = 'var(--surface2)';
+    b.style.borderColor = 'var(--border)';
+    b.style.color = 'var(--text2)';
   });
+  btn.style.background = 'rgba(240,165,0,.15)';
+  btn.style.borderColor = 'var(--accent)';
+  btn.style.color = 'var(--accent)';
+  document.getElementById('exp-cat').value = cat;
 }
 
-function editExpense(id) {
-  const e = state.expenses.find(x => x.ExpenseID === id);
-  if (e) showAddExpenseModal(e);
+function closeExpenseEntry() {
+  const overlay = document.getElementById('expense-entry-overlay');
+  if (overlay) overlay.remove();
 }
 
-async function saveExpenseForm() {
-  const id    = val('exp-id');
-  const cat   = val('exp-cat');
-  const desc  = val('exp-desc');
+async function saveExpenseEntry(existingId) {
+  const cat   = document.getElementById('exp-cat').value;
   const amt   = parseFloat(document.getElementById('exp-amt').value)||0;
-  const date  = val('exp-date');
-  const paid  = val('exp-paid');
-  const notes = val('exp-notes');
-  if (!cat || amt <= 0) { toast('Category and amount required', 'error'); return; }
+  const desc  = document.getElementById('exp-desc').value.trim();
+  const date  = document.getElementById('exp-date').value;
+  const paid  = document.getElementById('exp-paid').value;
+  const notes = document.getElementById('exp-notes').value.trim();
 
-  const data = { ExpenseID: id, Category: cat, Description: desc, Amount: amt, Date: date, PaidBy: paid, Notes: notes };
+  if (!cat) { toast('Please select a category', 'error'); return; }
+  if (amt <= 0) { toast('Please enter an amount', 'error'); return; }
+
+  const btn = document.querySelector('#expense-entry-overlay button[onclick^="saveExpenseEntry"]');
+  if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
+
+  const data = { ExpenseID: existingId||'', Category: cat, Description: desc, Amount: amt, Date: date, PaidBy: paid, Notes: notes };
   const res = await api('saveExpense', data);
+
   if (res.success) {
     // Update local state
-    if (id) {
-      const idx = state.expenses.findIndex(e => e.ExpenseID === id);
+    if (existingId) {
+      const idx = state.expenses.findIndex(e => e.ExpenseID === existingId);
       if (idx >= 0) state.expenses[idx] = { ...data };
-      else state.expenses.push({ ...data, ExpenseID: res.ExpenseID||id });
     } else {
-      state.expenses.push({ ...data, ExpenseID: res.ExpenseID });
+      state.expenses.push({ ...data, ExpenseID: res.ExpenseID || ('EXP-'+Date.now()) });
     }
-    closeModal();
-    renderExpenses();
-    toast('✓ Expense saved', 'success');
+    closeExpenseEntry();
+    toast('✓ Expense saved — UGX ' + amt.toLocaleString(), 'success');
+    // Refresh if on expenses tab
+    if (state.currentTxTab === 'expenses') renderExpenses();
+  } else {
+    toast('Failed to save', 'error');
+    if (btn) { btn.textContent = '💾 Save Expense'; btn.disabled = false; }
   }
 }
 
-async function deleteExpenseItem(id) {
+async function deleteExpenseEntry(id) {
   if (!confirm('Delete this expense?')) return;
   state.expenses = state.expenses.filter(e => e.ExpenseID !== id);
-  renderExpenses();
-  try { await api('deleteExpense', { ExpenseID: id }); } catch(e) {}
+  closeExpenseEntry();
+  try { await api('deleteExpense', { ExpenseID: id }); } catch(ex) {}
+  if (state.currentTxTab === 'expenses') renderExpenses();
   toast('Expense deleted', 'success');
 }
+
 
 function setChecklistFilter(f) {
   window._clFilter = f;
