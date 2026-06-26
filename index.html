@@ -8001,6 +8001,20 @@ function showSettings() {
             <button class="btn btn-primary" onclick="saveAllSettings()">💾 Save All</button>
     </div>
 
+    <!-- COPYRIGHT -->
+    <div style="border-top:1px solid var(--border);padding-top:16px;text-align:center">
+      <div style="font-size:11px;color:var(--text3);line-height:1.8">
+        <div style="font-size:18px;margin-bottom:6px">🔧</div>
+        <div style="font-size:13px;font-weight:800;color:var(--text)">Oola Spares</div>
+        <div style="font-size:11px;color:var(--text3)">Motorcycle Parts Manager</div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text3)">
+          Developed by <span style="color:var(--accent);font-weight:700">Isaac Oola</span><br>
+          Okum Energy Group · Lira, Uganda<br>
+          <span style="color:var(--text3)">© 2025 All rights reserved</span>
+        </div>
+      </div>
+    </div>
+
     <!-- DATA TOOLS — admin only -->
     <div style="border-top:1px solid var(--border);padding-top:16px">
       <div class="card-title" style="margin-bottom:10px">Data Tools</div>
@@ -10316,5 +10330,41 @@ function highlight(text, query) {
 // (handled by renderTxTab calling renderTxTabFiltered)
 
 </script>
+
+<!-- COPYRIGHT FOOTER -->
+<div id="app-copyright" style="
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;
+  text-align:center;
+  padding:4px 10px;
+  font-size:10px;
+  color:var(--text3);
+  background:var(--surface);
+  border-top:1px solid var(--border);
+  z-index:10;
+  font-family:var(--font);
+  letter-spacing:0.2px;
+">
+  © 2025 <strong style="color:var(--text2)">Oola Spares</strong> — Developed by <strong style="color:var(--accent)">Isaac Oola</strong> · Okum Energy Group · All rights reserved
+</div>
+
+<script>
+  // Show copyright on login screen, hide inside app
+  function updateCopyrightVisibility() {
+    const cp = document.getElementById('app-copyright');
+    if (!cp) return;
+    const loginVisible = document.getElementById('login-screen') &&
+      document.getElementById('login-screen').style.display !== 'none';
+    cp.style.display = loginVisible ? 'block' : 'none';
+  }
+  window.addEventListener('load', () => {
+    setTimeout(updateCopyrightVisibility, 500);
+    // Re-check whenever login screen toggles
+    const observer = new MutationObserver(updateCopyrightVisibility);
+    const loginScreen = document.getElementById('login-screen');
+    if (loginScreen) observer.observe(loginScreen, { attributes: true, attributeFilter: ['style'] });
+  });
+</script>
+
 </body>
 </html>
