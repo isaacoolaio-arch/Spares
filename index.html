@@ -3766,10 +3766,12 @@ async function saveBulkPrices() {
   toast('✓ Updated ' + saved + ' parts', 'success');
   if (state.currentView === 'parts') filterParts();
 
-  // If we were in "missing only" mode, refresh the modal to show remaining missing parts
+  // Refresh modal — reload data first so state is accurate
   const wasFilteredMode = document.getElementById('bpe-noprice-only');
-  if (wasFilteredMode && wasFilteredMode.checked) {
-    showBulkPriceModal(true); // refresh — saved parts disappear, remaining stay
+  const inMissingMode = wasFilteredMode && wasFilteredMode.checked;
+  if (inMissingMode) {
+    await loadAll();
+    showBulkPriceModal(true);
   } else {
     closeModal();
   }
