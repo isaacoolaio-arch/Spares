@@ -15,7 +15,8 @@ var SHEETS = {
   CHECKLIST: 'Checklist',
   SETTINGS: 'Settings',
   NOTIFICATIONS: 'Notifications',
-  CUSTOMERS: 'Customers'
+  CUSTOMERS: 'Customers',
+  EXPENSES: 'Expenses'
 };
 
 // ============================================================
@@ -97,6 +98,9 @@ function handleRequest(e) {
       case 'updateChecklistStatus': result = updateChecklistStatus(data); break;
       case 'deleteChecklistItem': result = deleteChecklistItem(data); break;
       case 'clearAllChecklist':    result = clearAllChecklist(); break;
+      case 'saveExpense':        result = saveExpense(data); break;
+      case 'deleteExpense':      result = deleteExpense(data); break;
+      case 'getExpenses':        result = getExpenses(); break;
 
       // DASHBOARD
       case 'getDashboard': result = getDashboard(); break;
@@ -143,7 +147,8 @@ function setupSheets() {
     { name: SHEETS.CHECKLIST, headers: ['ItemID','PartID','PartName','TargetQty','Status','Priority','Notes','UpdatedAt'] },
     { name: SHEETS.SETTINGS, headers: ['Key','Value'] },
     { name: SHEETS.NOTIFICATIONS, headers: ['NotifID','ToUser','FromUser','Type','Message','OTP','CreatedAt','Read'] },
-    { name: SHEETS.CUSTOMERS, headers: ['CustomerID','Name','Phone','Email','Address','Notes','CreatedAt','TotalPurchases','TotalSpent'] }
+    { name: SHEETS.CUSTOMERS, headers: ['CustomerID','Name','Phone','Email','Address','Notes','CreatedAt','TotalPurchases','TotalSpent'] },
+    { name: SHEETS.EXPENSES, headers: ['ExpenseID','Date','Category','Description','Amount','PaidBy','Notes'] }
   ];
 
   configs.forEach(cfg => {
@@ -2740,4 +2745,65 @@ function formatDate(date) {
   const m = months[date.getMonth()];
   const y = date.getFullYear();
   return `${d}-${m}-${y}`;
+}
+
+// ============================================================
+// EXPENSES
+// ============================================================
+function getExpenses() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEETS.EXPENSES);
+  if (!sheet || sheet.getLastRow() < 2) return { success: true, data: [] };
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0];
+  const idx = (h) => headers.indexOf(h);
+  const data = rows.slice(1).map(r => ({
+    ExpenseID:   String(r[idx('ExpenseID')]  || ''),
+    Date:        String(r[idx('Date')]        || ''),
+    Category:    String(r[idx('Category')]    || ''),
+    Description: String(r[idx('Description')]|| ''),
+    Amount:      parseFloat(r[idx('Amount')] || 0),
+    PaidBy:      String(r[idx('PaidBy')]      || ''),
+    Notes:       String(r[idx('Notes')]       || '')
+  })).filter(r => r.ExpenseID);
+  return { success: true, data };
+}
+
+function saveExpense(data) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEETS.EXPENSES);
+  const now = formatDate(new Date());
+  if (data.ExpenseID && data.ExpenseID !== '') {
+    // Update existing
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] === data.ExpenseID) {
+        sheet.getRange(i+1, 1, 1, 7).setValues([[
+          data.ExpenseID, data.Date||now, data.Category||'',
+          data.Description||'', parseFloat(data.Amount)||0,
+          data.PaidBy||'', data.Notes||''
+        ]]);
+        return { success: true };
+      }
+    }
+  }
+  // New expense
+  const id = 'EXP-' + new Date().getTime();
+  sheet.appendRow([id, data.Date||now, data.Category||'',
+    data.Description||'', parseFloat(data.Amount)||0,
+    data.PaidBy||'', data.Notes||'']);
+  return { success: true, ExpenseID: id };
+}
+
+function deleteExpense(data) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEETS.EXPENSES);
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === data.ExpenseID) {
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  return { success: false };
 }
