@@ -5620,9 +5620,10 @@ function renderChecklist() {
 
   // Apply stock filter to items
   const applyStockFilter = (list) => {
-    if (activeFilter === 'out')  return list.filter(i => { const s = stockMap[i.PartID]; return s && s.qty <= 0; });
-    if (activeFilter === 'low')  return list.filter(i => { const s = stockMap[i.PartID]; return s && s.qty > 0 && s.qty <= s.reorder; });
-    if (activeFilter === 'ok')   return list.filter(i => { const s = stockMap[i.PartID]; return !s || s.qty > s.reorder; });
+    if (activeFilter === 'out')      return list.filter(i => { const s = stockMap[i.PartID]; return s && s.qty <= 0; });
+    if (activeFilter === 'low')      return list.filter(i => { const s = stockMap[i.PartID]; return s && s.qty > 0 && s.qty <= s.reorder; });
+    if (activeFilter === 'ok')       return list.filter(i => { const s = stockMap[i.PartID]; return !s || s.qty > s.reorder; });
+    if (activeFilter === 'noprice')  return list.filter(i => { const p = state.parts.find(x => x.PartID === i.PartID); return !p || !(parseFloat(p.CostPrice) > 0); });
     return list;
   };
 
@@ -5634,9 +5635,10 @@ function renderChecklist() {
   const ordered  = applyStockFilter(allOrdered);
   const received = applyStockFilter(allReceived);
 
-  const outCount = allPending.filter(i => { const s = stockMap[i.PartID]; return s && s.qty <= 0; }).length;
-  const lowCount = allPending.filter(i => { const s = stockMap[i.PartID]; return s && s.qty > 0 && s.qty <= s.reorder; }).length;
-  const okCount  = allPending.filter(i => { const s = stockMap[i.PartID]; return !s || s.qty > s.reorder; }).length;
+  const outCount     = allPending.filter(i => { const s = stockMap[i.PartID]; return s && s.qty <= 0; }).length;
+  const lowCount     = allPending.filter(i => { const s = stockMap[i.PartID]; return s && s.qty > 0 && s.qty <= s.reorder; }).length;
+  const okCount      = allPending.filter(i => { const s = stockMap[i.PartID]; return !s || s.qty > s.reorder; }).length;
+  const noPriceCount = items.filter(i => { const p = state.parts.find(x => x.PartID === i.PartID); return !p || !(parseFloat(p.CostPrice) > 0); }).length;
 
   const filterPill = (key, label, count, color) => {
     const active = activeFilter === key;
@@ -5709,12 +5711,21 @@ function renderChecklist() {
         + (supplier ? ' &nbsp;·&nbsp; ' + supplier : '')
         + '</div></div>';
 
-      if (isPending && cost > 0) {
-        // Always show unit cost on the right — qty editing is in the summary box above
-        html += '<div style="text-align:right;flex-shrink:0">'
-          + '<div style="font-size:12px;font-weight:700;color:' + (isSelected ? 'var(--blue)' : 'var(--text3)') + '">UGX ' + cost.toLocaleString() + '</div>'
-          + '<div style="font-size:10px;color:var(--text3)">per unit</div>'
-          + '</div>';
+      if (isPending) {
+        if (cost > 0) {
+          html += '<div style="text-align:right;flex-shrink:0">'
+            + '<div style="font-size:12px;font-weight:700;color:' + (isSelected ? 'var(--blue)' : 'var(--text3)') + '">UGX ' + cost.toLocaleString() + '</div>'
+            + '<div style="font-size:10px;color:var(--text3)">per unit</div>'
+            + '</div>';
+        } else {
+          // No price set — show fix button
+          const part = state.parts.find(p => p.PartID === i.PartID);
+          if (part) {
+            html += '<button data-pid="' + part.PartID + '" onclick="showEditPartModal(this.dataset.pid)" '
+              + 'style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:#a855f7;border-radius:8px;'
+              + 'padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font);flex-shrink:0">⚠ Set price</button>';
+          }
+        }
       }
 
       html += '<button data-iid="' + i.ItemID + '"'
@@ -5813,6 +5824,7 @@ function renderChecklist() {
       ${filterPill('out', '🔴 Out of stock', outCount, 'var(--red)')}
       ${filterPill('low', '🟡 Low stock', lowCount, 'var(--accent)')}
       ${okCount > 0 ? filterPill('ok', '🟢 In stock', okCount, 'var(--green)') : ''}
+      ${noPriceCount > 0 ? filterPill('noprice', '⚠ No price', noPriceCount, '#a855f7') : ''}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:11px;color:var(--text3)">☑ Select to order · tap ⟳ to cycle</div>
