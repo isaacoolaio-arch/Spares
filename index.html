@@ -3683,9 +3683,11 @@ function showBulkPriceModal(filterNoPriceOnly = false) {
       + name + '<span style="color:var(--text3);font-weight:400">' + size + '</span></td>'
       + '<td style="padding:6px 4px;border-bottom:1px solid var(--border)">'
       + '<input type="number" data-pid="' + p.PartID + '" data-field="cost" value="' + (cost||'') + '" placeholder="Cost" min="0"'
+      + ' oninput="this.dataset.dirty=1;this.style.borderColor=\'var(--blue)\'"'
       + ' style="width:90px;padding:4px 6px;border-radius:6px;border:1px solid ' + (noCost?'#a855f7':'var(--border2)') + ';background:var(--surface2);color:var(--text);font-size:12px;font-family:var(--font)" /></td>'
       + '<td style="padding:6px 4px;border-bottom:1px solid var(--border)">'
       + '<input type="number" data-pid="' + p.PartID + '" data-field="sell" value="' + (sell||'') + '" placeholder="Selling" min="0"'
+      + ' oninput="this.dataset.dirty=1;this.style.borderColor=\'var(--blue)\'"'
       + ' style="width:90px;padding:4px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:var(--font)" /></td>'
       + '</tr>';
   }).join('');
@@ -3723,8 +3725,10 @@ function showBulkPriceModal(filterNoPriceOnly = false) {
 
 async function saveBulkPrices() {
   const inputs = document.querySelectorAll('#modal-content input[data-pid]');
+  const dirtyOnly = Array.from(inputs).filter(i => i.dataset.dirty === '1');
+  if (dirtyOnly.length === 0) { toast('No changes — type new prices first', 'error'); return; }
   const changes = {};
-  inputs.forEach(inp => {
+  dirtyOnly.forEach(inp => {
     const pid   = inp.dataset.pid;
     const field = inp.dataset.field;
     const val   = parseFloat(inp.value) || 0;
@@ -3732,9 +3736,9 @@ async function saveBulkPrices() {
     changes[pid][field] = val;
   });
 
-  // Only save parts that have at least one price set
-  const toSave = Object.entries(changes).filter(([pid, vals]) => vals.cost > 0 || vals.sell > 0);
-  if (toSave.length === 0) { toast('No prices to save', 'error'); return; }
+  // Only save parts where user actually typed (data-dirty)
+  if (Object.keys(changes).length === 0) { toast('No changes — type prices first', 'error'); return; }
+  const toSave = Object.entries(changes);
 
   toast('Saving ' + toSave.length + ' parts...', 'success');
   let saved = 0;
