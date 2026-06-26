@@ -10332,12 +10332,27 @@ function highlight(text, query) {
 </script>
 
 <!-- COPYRIGHT FOOTER -->
+<script>
+  // Copyright footer — show on login (pin-screen), hide inside app
+  window.addEventListener('load', () => {
+    const cp = document.getElementById('app-copyright');
+    const pinScreen = document.getElementById('pin-screen');
+    const appDiv = document.getElementById('app');
+    if (!cp || !pinScreen || !appDiv) return;
+    const update = () => {
+      const inApp = appDiv.classList.contains('visible');
+      cp.style.display = inApp ? 'none' : 'block';
+    };
+    update();
+    new MutationObserver(update).observe(appDiv, { attributes: true, attributeFilter: ['class'] });
+  });
+</script>
+
 <div id="app-copyright" style="
-  display:none;
   position:fixed;bottom:0;left:0;right:0;
   text-align:center;
-  padding:4px 10px;
-  font-size:10px;
+  padding:6px 10px;
+  font-size:11px;
   color:var(--text3);
   background:var(--surface);
   border-top:1px solid var(--border);
@@ -10347,24 +10362,6 @@ function highlight(text, query) {
 ">
   © 2025 <strong style="color:var(--text2)">Oola Spares</strong> — Developed by <strong style="color:var(--accent)">Isaac Oola</strong> · Okum Energy Group · All rights reserved
 </div>
-
-<script>
-  // Show copyright on login screen, hide inside app
-  function updateCopyrightVisibility() {
-    const cp = document.getElementById('app-copyright');
-    if (!cp) return;
-    const loginVisible = document.getElementById('login-screen') &&
-      document.getElementById('login-screen').style.display !== 'none';
-    cp.style.display = loginVisible ? 'block' : 'none';
-  }
-  window.addEventListener('load', () => {
-    setTimeout(updateCopyrightVisibility, 500);
-    // Re-check whenever login screen toggles
-    const observer = new MutationObserver(updateCopyrightVisibility);
-    const loginScreen = document.getElementById('login-screen');
-    if (loginScreen) observer.observe(loginScreen, { attributes: true, attributeFilter: ['style'] });
-  });
-</script>
 
 </body>
 </html>
