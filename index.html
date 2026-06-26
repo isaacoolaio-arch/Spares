@@ -2425,13 +2425,19 @@ async function initApp() {
     const snap = await IDB.get('__settings_snapshot__');
     if (snap) {
       const cached = JSON.parse(snap);
-      state.settings = cached;
+      state.settings = { ...state.settings, ...cached };
       refreshLoginUserNames();
     }
   } catch(e) {}
 
   // Load all data (smartApi handles online/offline automatically)
   await loadAll();
+
+  // Refresh login screen again after full load — ensures latest users always show
+  refreshLoginUserNames();
+  // Save snapshot after every successful load
+  try { await IDB.set('__settings_snapshot__', JSON.stringify(state.settings)); } catch(e) {}
+
   renderDashboard();
 
   // If online, check for queued offline changes
@@ -8213,6 +8219,18 @@ function installApp() {
     });
   }
 }
+
+// Restore login screen users from IDB snapshot on page load (before login)
+window.addEventListener('load', async () => {
+  try {
+    const snap = await IDB.get('__settings_snapshot__');
+    if (snap) {
+      const cached = JSON.parse(snap);
+      state.settings = { ...state.settings, ...cached };
+      refreshLoginUserNames();
+    }
+  } catch(e) {}
+});
 
 // Handle shortcut URLs — e.g. ?action=sale opens sale modal on load
 window.addEventListener('load', () => {
