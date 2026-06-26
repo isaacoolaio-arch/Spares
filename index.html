@@ -3766,21 +3766,30 @@ async function saveBulkPrices() {
       part.CostPrice    = updatedPart.CostPrice;
       part.SellingPrice = updatedPart.SellingPrice;
       saved++;
-    } catch(e) {}
+    } catch(e) {
+      // Queue for retry when connection returns
+      try { await IDB.addToQueue('savePart', updatedPart); } catch(e2) {}
+      // Still update local state optimistically
+      part.CostPrice    = updatedPart.CostPrice;
+      part.SellingPrice = updatedPart.SellingPrice;
+      saved++; // count as saved locally
+    }
   }
 
   toast('✓ Updated ' + saved + ' parts', 'success');
   if (state.currentView === 'parts') filterParts();
 
-  // Refresh modal — reload data first so state is accurate
+  // Refresh modal using local state (already updated above)
+  // Don't loadAll — server may be slow/offline and would overwrite local updates
   const wasFilteredMode = document.getElementById('bpe-noprice-only');
   const inMissingMode = wasFilteredMode && wasFilteredMode.checked;
-  if (inMissingMode) {
-    await loadAll();
-    showBulkPriceModal(true);
-  } else {
+  if (inMissingMode && saved > 0) {
+    showBulkPriceModal(true); // re-render from updated local state
+  } else if (saved > 0) {
     closeModal();
   }
+  // Background sync to server
+  if (saved > 0) loadAll().catch(()=>{});
 }
 
 function showEditPartModal(partId) {
