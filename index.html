@@ -3683,11 +3683,11 @@ function showBulkPriceModal(filterNoPriceOnly = false) {
       + name + '<span style="color:var(--text3);font-weight:400">' + size + '</span></td>'
       + '<td style="padding:6px 4px;border-bottom:1px solid var(--border)">'
       + '<input type="number" data-pid="' + p.PartID + '" data-field="cost" value="' + (cost||'') + '" placeholder="Cost" min="0"'
-      + ' oninput="this.dataset.dirty=1;this.style.borderColor=\'var(--blue)\'"'
+      + ' oninput="markBpeDirty(this)"'
       + ' style="width:90px;padding:4px 6px;border-radius:6px;border:1px solid ' + (noCost?'#a855f7':'var(--border2)') + ';background:var(--surface2);color:var(--text);font-size:12px;font-family:var(--font)" /></td>'
       + '<td style="padding:6px 4px;border-bottom:1px solid var(--border)">'
       + '<input type="number" data-pid="' + p.PartID + '" data-field="sell" value="' + (sell||'') + '" placeholder="Selling" min="0"'
-      + ' oninput="this.dataset.dirty=1;this.style.borderColor=\'var(--blue)\'"'
+      + ' oninput="markBpeDirty(this)"'
       + ' style="width:90px;padding:4px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:var(--font)" /></td>'
       + '</tr>';
   }).join('');
@@ -3721,6 +3721,12 @@ function showBulkPriceModal(filterNoPriceOnly = false) {
       <button class="btn" onclick="closeModal()">Cancel</button>
     </div>
   `, 'large');
+}
+
+function markBpeDirty(inp) {
+  inp.dataset.dirty = '1';
+  inp.style.borderColor = '#3b82f6';
+  inp.style.boxShadow = '0 0 0 2px rgba(59,130,246,.2)';
 }
 
 async function saveBulkPrices() {
