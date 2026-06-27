@@ -2642,7 +2642,7 @@ function fabAction() {
     if (state.currentTxTab === 'sales') showAddSaleModal();
     if (state.currentTxTab === 'purchases') showAddPurchaseModal();
     if (state.currentTxTab === 'checklist') showAddChecklistModal();
-    if (state.currentTxTab === 'expenses')  showAddExpenseModal();
+    if (state.currentTxTab === 'expenses')  openExpenseEntry();
   }
 }
 
@@ -6080,7 +6080,7 @@ function renderExpenses() {
         <div style="font-size:44px;margin-bottom:12px">💸</div>
         <div style="font-size:16px;font-weight:800;color:var(--fg);margin-bottom:8px">No Expenses Yet</div>
         <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Track business expenses to see true net profit.<br>Rent, salaries, transport, utilities and more.</div>
-        <button onclick="showAddExpenseModal()" style="background:var(--accent);border:none;color:#000;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:var(--font)">➕ Add First Expense</button>
+        <button onclick="openExpenseEntry()" style="background:var(--accent);border:none;color:#000;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:var(--font)">➕ Add First Expense</button>
       </div>`;
     return;
   }
@@ -6130,10 +6130,16 @@ function renderExpenses() {
   document.getElementById('tx-content').innerHTML = html;
 }
 
-// Open expense entry — admin direct, staff need approval PIN
+// Open expense entry — admin or expense-permitted user goes direct, others need admin PIN
 async function openExpenseEntry() {
-  if (state.currentRole === 'admin') {
-    showAddExpenseModal();
+  const isAdmin = state.currentRole === 'admin';
+  // Check if current user has expense permission
+  const currentUserRole = state.currentRole; // e.g. 'user1', 'user2' etc
+  const expenseUser = state.settings.expenseManagerRole || ''; // e.g. 'user1'
+  const hasExpensePerm = isAdmin || (expenseUser && currentUserRole === expenseUser);
+
+  if (hasExpensePerm) {
+    openExpenseEntry_show();
     return;
   }
   // Non-admin: request admin PIN approval
@@ -6174,7 +6180,7 @@ function expPinKey(k) {
     api('verifyPin', { pin: window._expPin, role: 'admin' }).then(res => {
       if (res.success) {
         closeModal();
-        showAddExpenseModal();
+        openExpenseEntry_show();
       } else {
         document.getElementById('exp-pin-error').textContent = 'Wrong PIN — try again';
         window._expPin = '';
@@ -6243,7 +6249,7 @@ function openExpenseEntry(existing) {
         <div style="display:flex;align-items:center;background:var(--surface2);border:2px solid rgba(168,85,247,.35);border-radius:12px;padding:4px 14px;gap:8px">
           <span style="font-size:15px;font-weight:700;color:var(--text3)">UGX</span>
           <input id="exp-amt" type="number" inputmode="numeric" min="0" value="${e.Amount||''}" placeholder="0"
-            style="flex:1;border:none;background:transparent;font-size:30px;font-weight:900;color:#a855f7;font-family:var(--font);outline:none;padding:8px 0;-moz-appearance:textfield"
+            style="flex:1;border:none;background:transparent;font-size:30px;font-weight:900;color:#a855f7;font-family:var(--font);outline:none;padding:8px 0"
             oninput="this.style.color=this.value>0?'#a855f7':'var(--text3)'" />
         </div>
       </div>
@@ -8370,6 +8376,21 @@ function showSettings() {
         }
         return html;
       })()}
+            <!-- Expense Manager Permission -->
+            ${role === 'admin' ? `
+            <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+              <div class="card-title" style="margin-bottom:8px">💸 Expense Permission</div>
+              <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Grant one staff member permission to record expenses without Admin PIN</div>
+              <select id="cfg-expense-manager" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px">
+                <option value="">None (Admin only)</option>
+                ${[1,2,3,4,5].map(i => {
+                  const n = state.settings['user'+i+'Name'];
+                  if (!n) return '';
+                  const sel = state.settings.expenseManagerRole === 'user'+i ? 'selected' : '';
+                  return '<option value="user'+i+'" '+sel+'>'+n+'</option>';
+                }).join('')}
+              </select>
+            </div>` : ''}
             <button class="btn btn-primary" onclick="saveAllSettings()">💾 Save All</button>
     </div>
 
@@ -8478,6 +8499,8 @@ async function saveAllSettings() {
   };
   const adminPin = val('cfg-pin');
   if (adminPin) data.pin = adminPin;
+  const expMgr = document.getElementById('cfg-expense-manager');
+  if (expMgr) data.expenseManagerRole = expMgr.value;
   // Handle up to 5 staff users
   for (let i = 1; i <= 5; i++) {
     const nameEl = document.getElementById('cfg-u' + i + 'name');
