@@ -7345,8 +7345,8 @@ async function savePurchase() {
 // EDIT / DELETE — SALES
 // ============================================================
 function showEditSaleModal(saleId) {
-  const s = state.sales.find(x => x.SaleID === saleId);
-  if (!s) { toast('Sale not found', 'error'); return; }
+  let s = state.sales.find(x => x.SaleID === saleId);
+  if (!s) { s = { SaleID: saleId, PartID: '', PartName: 'Unknown', Qty: 1, SellingPrice: 0, TotalPrice: 0, Date: '', Notes: '' }; }
   showModal(`
     <div class="modal-header">
       <div class="modal-title">Edit Sale</div>
@@ -7453,8 +7453,11 @@ async function doDeleteSale(saleId) {
 // EDIT / DELETE — PURCHASES
 // ============================================================
 function showEditPurchaseModal(purchaseId) {
-  const p = state.purchases.find(x => x.PurchaseID === purchaseId);
-  if (!p) { toast('Purchase not found', 'error'); return; }
+  let p = state.purchases.find(x => x.PurchaseID === purchaseId);
+  // If not in local state, create a minimal placeholder so UI still opens
+  if (!p) {
+    p = { PurchaseID: purchaseId, PartID: '', PartName: 'Unknown', Qty: 0, CostPrice: 0, TotalCost: 0, SupplierName: '', Date: '', Notes: '' };
+  }
   const sortedParts = [...state.parts].sort((a,b) => (a.Name||'').localeCompare(b.Name||''));
   showModal(`
     <div class="modal-header">
@@ -7569,12 +7572,24 @@ function confirmDeletePurchase(purchaseId, partName) {
 async function doDeletePurchase(purchaseId) {
   const btn = document.querySelector('#modal-container .btn-primary');
   if (btn) { btn.textContent = 'Deleting...'; btn.disabled = true; }
-  const res = await api('deletePurchase', { PurchaseID: purchaseId });
-  if (res.success) {
-    await loadAll(); closeModal(); renderTxTab(); renderDashboard();
-    toast('Purchase deleted ✓', 'success');
-  } else {
-    toast(res.error || 'Delete failed', 'error');
+
+  // Optimistic local delete — reverse stock
+  const p = state.purchases.find(x => x.PurchaseID === purchaseId);
+  if (p) {
+    const part = state.parts.find(x => x.PartID === p.PartID);
+    if (part) part.StockQty = Math.max(0, (parseInt(part.StockQty)||0) - (parseInt(p.Qty)||0));
+  }
+  state.purchases = state.purchases.filter(x => x.PurchaseID !== purchaseId);
+  try { await IDB.setAll('purchases', state.purchases); } catch(e) {}
+  try { await IDB.setAll('parts', state.parts); } catch(e) {}
+  closeModal(); renderTxTab(); renderDashboard();
+  toast('Purchase deleted ✓', 'success');
+
+  // Sync to server
+  try {
+    await api('deletePurchase', { PurchaseID: purchaseId });
+  } catch(e) {
+    await IDB.addToQueue('deletePurchase', { PurchaseID: purchaseId });
   }
 }
 
