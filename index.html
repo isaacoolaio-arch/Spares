@@ -283,6 +283,7 @@
       animation: slideUp .22s cubic-bezier(.4,0,.2,1);
     }
     @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .modal-header {
       display: flex; justify-content: space-between; align-items: center;
       margin-bottom: 18px;
@@ -551,8 +552,14 @@
         })();
       </script>
       <span id="local-badge" style="display:none;font-size:10px;font-weight:700;background:rgba(240,165,0,.15);color:var(--accent);border:1px solid rgba(240,165,0,.3);padding:3px 8px;border-radius:20px">LOCAL</span>
-      <span id="sync-status" style="display:none;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;background:var(--surface2)"></span>
-      <button id="sync-btn" onclick="autoSync()" style="display:none;align-items:center;gap:4px;font-size:11px;font-weight:700;background:rgba(59,130,246,.15);color:#3b82f6;border:1px solid rgba(59,130,246,.3);padding:4px 10px;border-radius:20px;cursor:pointer">🔄 Sync</button>
+      <!-- Activity indicator -->
+      <div id="activity-bar" style="display:none;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px">
+        <span id="activity-spinner" style="display:none;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0"></span>
+        <span id="activity-icon" style="font-size:12px;flex-shrink:0"></span>
+        <span id="activity-text" style="font-size:10px;font-weight:700;color:var(--text2);white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis"></span>
+        <button id="activity-sync-btn" onclick="autoSync()" style="display:none;background:var(--blue);color:#fff;border:none;border-radius:12px;padding:2px 8px;font-size:10px;font-weight:800;cursor:pointer;font-family:var(--font)">Sync</button>
+      </div>
+      <span id="sync-status" style="display:none"></span>
       <span id="online-badge" style="font-size:13px" title="Connection status">🟢</span>
       <button id="notif-btn" onclick="showInbox()" style="position:relative;background:none;border:none;font-size:20px;cursor:pointer;padding:2px 4px;display:none">
         🔔<span id="notif-badge" style="display:none;position:absolute;top:-2px;right:-2px;background:var(--red);color:#fff;font-size:9px;font-weight:900;border-radius:50%;width:14px;height:14px;line-height:14px;text-align:center">0</span>
@@ -1537,6 +1544,7 @@ async function smartApi(action, data = {}) {
 
   // Queue for later sync (offline only)
   await IDB.addToQueue(action, data);
+  _showPendingIfQueued().catch(()=>{});
   return applyLocalWrite(action, data);
 }
 
@@ -1811,6 +1819,16 @@ async function callServer(action, data = {}) {
 }
 
 // ── AUTO SYNC ──
+// Show pending indicator after any offline queue write
+async function _showPendingIfQueued() {
+  try {
+    const q = await IDB.getQueue();
+    if (q && q.length > 0) {
+      showActivity('📤', q.length + ' change' + (q.length>1?'s':'') + ' pending — tap Sync', 'pending');
+    }
+  } catch(e) {}
+}
+
 async function autoSync() {
   if (!isOnline || syncInProgress) return;
   const queue = await IDB.getQueue();
@@ -1818,8 +1836,8 @@ async function autoSync() {
 
   syncInProgress = true;
   const syncBtn = document.getElementById('sync-btn');
-  if (syncBtn) syncBtn.style.display = 'flex';
-  showSyncStatus(`Syncing ${queue.length} change${queue.length>1?'s':''}...`);
+  if (syncBtn) syncBtn.style.display = 'none';
+  showActivity('', `Syncing ${queue.length} change${queue.length>1?'s':''}...`, 'syncing');
 
   // Filter out read-only actions that should never be in the queue
   const writeActions = ['savePart','deletePart','saveSupplier','deleteSupplier',
@@ -1860,8 +1878,7 @@ async function autoSync() {
   // ALWAYS clear the queue after attempting sync — prevents infinite re-sync loop
   await IDB.clearQueue();
 
-  // Hide sync button since queue is now empty
-  if (syncBtn) syncBtn.style.display = 'none';
+  // Hide old sync button
 
   // Refresh data from server
   try {
@@ -1873,9 +1890,9 @@ async function autoSync() {
   } catch(e) {}
 
   if (failed > 0) {
-    showSyncStatus(`✓ ${synced} synced${failed > 0 ? ', ' + failed + ' skipped' : ''}`, 'success');
+    showActivity('✓', `${synced} change${synced>1?'s':''} synced${failed > 0 ? ', ' + failed + ' skipped' : ''}`, 'success', true);
   } else {
-    showSyncStatus(`✓ Synced ${synced} changes`, 'success');
+    showActivity('✓', `${synced} change${synced>1?'s':''} synced to server`, 'success', true);
   }
   syncInProgress = false;
 }
@@ -1961,12 +1978,67 @@ async function testConnection() {
 }
 
 function showSyncStatus(msg, type = 'info') {
-  const el = document.getElementById('sync-status');
-  if (!el) return;
-  el.textContent = msg;
-  el.style.color = type === 'success' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--accent)';
-  el.style.display = 'block';
-  if (type !== 'info') setTimeout(() => { if(el) el.style.display = 'none'; }, 3000);
+  // Legacy shim — route to showActivity
+  showActivity(
+    type === 'success' ? '✓' : type === 'error' ? '✗' : '🔄',
+    msg,
+    type,
+    type !== 'info'
+  );
+}
+
+let _activityTimer = null;
+function showActivity(icon, text, type, autoHide = false) {
+  const bar  = document.getElementById('activity-bar');
+  const spin = document.getElementById('activity-spinner');
+  const ico  = document.getElementById('activity-icon');
+  const txt  = document.getElementById('activity-text');
+  const btn  = document.getElementById('activity-sync-btn');
+  if (!bar) return;
+
+  bar.style.display = 'flex';
+  ico.textContent   = icon;
+  txt.textContent   = text;
+  spin.style.display = (type === 'syncing') ? 'block' : 'none';
+  btn.style.display  = 'none';
+
+  // Color the bar based on type
+  if (type === 'syncing') {
+    bar.style.borderColor = 'rgba(59,130,246,.4)';
+    txt.style.color = '#3b82f6';
+  } else if (type === 'success') {
+    bar.style.borderColor = 'rgba(74,222,128,.4)';
+    txt.style.color = 'var(--green)';
+  } else if (type === 'error') {
+    bar.style.borderColor = 'rgba(239,68,68,.4)';
+    txt.style.color = 'var(--red)';
+  } else if (type === 'pending') {
+    bar.style.borderColor = 'rgba(245,166,35,.4)';
+    txt.style.color = 'var(--accent)';
+    btn.style.display = 'inline-block'; // Show Sync button
+  } else {
+    bar.style.borderColor = 'var(--border)';
+    txt.style.color = 'var(--text2)';
+  }
+
+  if (_activityTimer) clearTimeout(_activityTimer);
+  if (autoHide) {
+    _activityTimer = setTimeout(() => {
+      // After auto-hide, check if there's still a pending queue
+      IDB.getQueue().then(q => {
+        if (q && q.length > 0) {
+          showActivity('📤', q.length + ' change' + (q.length>1?'s':'') + ' pending sync', 'pending');
+        } else {
+          if (bar) bar.style.display = 'none';
+        }
+      }).catch(() => { if (bar) bar.style.display = 'none'; });
+    }, 3000);
+  }
+}
+
+function hideActivity() {
+  const bar = document.getElementById('activity-bar');
+  if (bar) bar.style.display = 'none';
 }
 
 
@@ -2484,7 +2556,7 @@ async function initApp() {
     if (writeQueue.length > 0) {
       const syncBtn = document.getElementById('sync-btn');
       if (syncBtn) syncBtn.style.display = 'flex';
-      showSyncStatus(writeQueue.length + ' offline change' + (writeQueue.length > 1 ? 's' : '') + ' pending');
+      showActivity('📤', writeQueue.length + ' change' + (writeQueue.length>1?'s':'') + ' pending sync', 'pending');
       setTimeout(autoSync, 2000);
     } else if (queue.length > 0) {
       // Queue has only read operations — just clear it silently
