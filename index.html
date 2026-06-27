@@ -4154,23 +4154,29 @@ async function savePartWizard() {
       for (const b of brandsToSave) {
         const fullName = buildPartName({ ...d, brand: b, size: sz });
         const prices = (d.brandPrices && b) ? d.brandPrices[b] : {};
-        try {
-          const res = await api('savePart', {
-            Name: fullName, ItemName: d.itemName, Size: sz, Brand: b,
+        const partData1 = {
+            PartID: '', Name: fullName, ItemName: d.itemName, Size: sz, Brand: b,
             Category: d.category || d.cat, CostPrice: prices?.cost || d.cost || 0,
             SellingPrice: prices?.sell || d.sell || 0,
             StockQty: d.qty || 0, ReorderLevel: d.reorder || 5,
             Unit: d.unit || 'Piece', Movement: d.move || 'Medium',
             SupplierName: d.supplier || ''
-          });
+          };
+        // Optimistic local add
+        const localId1 = 'PRT-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+        state.parts.push({ ...partData1, PartID: localId1 });
+        try {
+          const res = await api('savePart', partData1);
           if (res.success) {
-            state.parts.push({ ...res.part, Name: fullName, ItemName: d.itemName, Size: sz, Brand: b,
-              Category: d.category||d.cat, CostPrice: prices?.cost||d.cost||0,
-              SellingPrice: prices?.sell||d.sell||0, StockQty: d.qty||0,
-              ReorderLevel: d.reorder||5, Movement: d.move||'Medium' });
+            if (res.id) {
+              const li = state.parts.findIndex(p => p.PartID === localId1);
+              if (li >= 0) state.parts[li].PartID = res.id;
+            }
             saved++;
-          } else failed++;
-        } catch(e) { failed++; }
+          } else {
+            await IDB.addToQueue('savePart', partData1); saved++;
+          }
+        } catch(e) { await IDB.addToQueue('savePart', partData1); saved++; }
       }
     }
     endSubmit(btn);
@@ -4186,33 +4192,28 @@ async function savePartWizard() {
     ? d.brands
     : (d.brand ? [d.brand] : ['']);
 
-  // Single edit — just update one
+  // Single edit — optimistic update + offline queue
   if (wizard.editId) {
     const b0 = brandsToSave[0];
     const cleanSize0 = (d.size && b0 && d.size.toLowerCase() === b0.toLowerCase()) ? '' : (d.size || '');
     const fullName = buildPartName({ ...d, brand: b0, size: cleanSize0 });
-    const res = await api('savePart', {
-      PartID: wizard.editId,
-      Name: fullName,
-      ItemName: d.itemName,
-      Size: cleanSize0,
-      Brand: b0,
-      PartNo: b0,
-      Description: cleanSize0,
-      Category: d.cat,
-      CostPrice: d.cost, SellingPrice: d.sell,
+    const editData = {
+      PartID: wizard.editId, Name: fullName, ItemName: d.itemName,
+      Size: cleanSize0, Brand: b0, PartNo: b0, Description: cleanSize0,
+      Category: d.cat, CostPrice: d.cost, SellingPrice: d.sell,
       StockQty: d.qty, ReorderLevel: d.reorder,
-      Unit: d.unit, Movement: d.move || 'Medium',
-      SupplierName: d.supplier || ''
-    });
-    if (res.success) {
-      await autoSyncRateFromPart(wizard.editId, fullName, d.supplier || '', d.cost);
-      await loadAll(); closeModal(); renderParts(); renderDashboard();
-      toast('Updated ✓', 'success');
-    } else {
-      toast(res.error || 'Error saving', 'error');
-      endSubmit(btn, '✓ Save Changes');
-    }
+      Unit: d.unit, Movement: d.move || 'Medium', SupplierName: d.supplier || ''
+    };
+    // Optimistic local update
+    const ei = state.parts.findIndex(p => p.PartID === wizard.editId);
+    if (ei >= 0) state.parts[ei] = { ...state.parts[ei], ...editData, Name: fullName };
+    try { await IDB.setAll('parts', state.parts); } catch(e2) {}
+    closeModal(); renderParts(); renderDashboard();
+    toast('Updated ✓', 'success');
+    try {
+      const res = await api('savePart', editData);
+      if (res.success) await autoSyncRateFromPart(wizard.editId, fullName, d.supplier||'', d.cost);
+    } catch(e) { await IDB.addToQueue('savePart', editData); }
     return;
   }
 
@@ -4223,24 +4224,32 @@ async function savePartWizard() {
     const bp = d.brandPrices && d.brandPrices[brand] ? d.brandPrices[brand] : { cost: d.cost, sell: d.sell };
     // Skip brands with no prices set
     if (!bp.cost && !bp.sell) continue;
-    const res = await api('savePart', {
-      PartID: '',
-      Name: fullName, Category: d.cat,
-      PartNo: brand, Description: d.size,
+    const newPartData = {
+      PartID: '', Name: fullName, ItemName: d.itemName, Category: d.cat,
+      PartNo: brand, Brand: brand, Description: d.size, Size: d.size||'',
       CostPrice: bp.cost || d.cost, SellingPrice: bp.sell || d.sell,
       StockQty: d.qty, ReorderLevel: d.reorder,
-      Unit: d.unit, Movement: d.move || 'Medium',
-      SupplierName: d.supplier || ''
-    });
-    if (res.success) {
-      done++;
-      if (res.id) await autoSyncRateFromPart(res.id, fullName, d.supplier || '', bp.cost || d.cost);
-    }
+      Unit: d.unit, Movement: d.move || 'Medium', SupplierName: d.supplier || ''
+    };
+    const localId = 'PRT-' + Date.now() + '-' + brand.slice(0,3);
+    state.parts.push({ ...newPartData, PartID: localId });
+    try {
+      const res = await api('savePart', newPartData);
+      if (res.success) {
+        done++;
+        const li = state.parts.findIndex(p => p.PartID === localId);
+        if (li >= 0 && res.id) state.parts[li].PartID = res.id;
+        if (res.id) await autoSyncRateFromPart(res.id, fullName, d.supplier||'', bp.cost||d.cost);
+      } else {
+        await IDB.addToQueue('savePart', newPartData); done++;
+      }
+    } catch(e) { await IDB.addToQueue('savePart', newPartData); done++; }
     if (btn) btn.textContent = `Saving... ${done}/${brandsToSave.length}`;
   }
 
-  await loadAll(); closeModal(); renderParts(); renderDashboard();
-  state.submitting = false; // release guard after multi-brand loop
+  try { await IDB.setAll('parts', state.parts); } catch(e2) {}
+  closeModal(); renderParts(); renderDashboard();
+  state.submitting = false;
   toast(done === 1
     ? buildPartName({ ...d, brand: brandsToSave[0] }) + ' added ✓'
     : done + ' entries added ✓ (' + brandsToSave.join(', ') + ')',
