@@ -6600,14 +6600,18 @@ async function markSelectedOrdered() {
   });
   window._clSelected = new Set();
   window._clQtys = {};
-  window._clFilter = 'all'; // Switch to All so Ordered section is visible
+  window._clFilter = 'all';
+  // Persist to IDB immediately
+  try { await IDB.setAll('checklist', state.checklist); } catch(e2) {}
   renderChecklist();
-  // Sync to server in parallel
-  try {
-    await Promise.all(toUpdate.map(i => api('updateChecklistStatus', { ItemID: i.ItemID, Status: 'Ordered', TargetQty: i.TargetQty })));
-    toast('✓ ' + toUpdate.length + ' parts ordered — tap ✓ when stock arrives', 'success');
-  } catch(e) {
-    toast('Some updates failed — tap Sync to retry', 'error');
+  toast('✓ ' + toUpdate.length + ' parts ordered — tap ✓ when stock arrives', 'success');
+  // Sync to server in background
+  for (const i of toUpdate) {
+    try {
+      await api('updateChecklistStatus', { ItemID: i.ItemID, Status: 'Ordered', TargetQty: i.TargetQty });
+    } catch(e) {
+      await IDB.addToQueue('updateChecklistStatus', { ItemID: i.ItemID, Status: 'Ordered', TargetQty: i.TargetQty });
+    }
   }
 }
 
@@ -6616,13 +6620,15 @@ async function markAllOrdered() {
   if (pending.length === 0) return;
   // Optimistic update
   pending.forEach(i => i.Status = 'Ordered');
+  try { await IDB.setAll('checklist', state.checklist); } catch(e2) {}
   renderChecklist();
-  // Sync all to server in parallel
-  try {
-    await Promise.all(pending.map(i => api('updateChecklistStatus', { ItemID: i.ItemID, Status: 'Ordered' })));
-    toast(`✓ ${pending.length} items marked as Ordered`, 'success');
-  } catch(e) {
-    toast('Some updates failed — tap Sync to retry', 'error');
+  toast(`✓ ${pending.length} items marked as Ordered`, 'success');
+  for (const i of pending) {
+    try {
+      await api('updateChecklistStatus', { ItemID: i.ItemID, Status: 'Ordered' });
+    } catch(e) {
+      await IDB.addToQueue('updateChecklistStatus', { ItemID: i.ItemID, Status: 'Ordered' });
+    }
   }
 }
 
@@ -6634,21 +6640,19 @@ async function cycleCheckStatus(itemId, current) {
   if (item) item.Status = next;
   renderChecklist();
 
-  // Sync to server
+  // Save to IDB immediately — don't wait for server
+  try { await IDB.setAll('checklist', state.checklist); } catch(e2) {}
+
+  // When marked Received → auto-create a Purchase record (optimistic)
+  if (next === 'Received' && item) {
+    await autoCreatePurchaseFromChecklist(item);
+  }
+
+  // Sync to server in background
   try {
     await api('updateChecklistStatus', { ItemID: itemId, Status: next });
-    const list = await IDB.getAll('checklist');
-    const idx = list.findIndex(i => i.ItemID === itemId);
-    if (idx >= 0) { list[idx].Status = next; await IDB.setAll('checklist', list); }
-
-    // When marked Received → auto-create a Purchase record
-    if (next === 'Received' && item) {
-      await autoCreatePurchaseFromChecklist(item);
-    }
   } catch(e) {
-    if (item) item.Status = current;
-    renderChecklist();
-    toast('Failed to update — try again', 'error');
+    await IDB.addToQueue('updateChecklistStatus', { ItemID: itemId, Status: next });
   }
 }
 
@@ -6676,13 +6680,20 @@ async function autoCreatePurchaseFromChecklist(item) {
     UpdateCost:   'false'
   };
 
+  // Optimistic local update
+  const purchWithId = { ...purchaseData, PurchaseID: 'PUR-' + Date.now() + '-auto' };
+  state.purchases.push(purchWithId);
+  // Update stock locally
+  const pp = state.parts.find(x => x.PartID === part.PartID);
+  if (pp) pp.StockQty = (parseInt(pp.StockQty)||0) + qty;
+  try { await IDB.setAll('purchases', state.purchases); } catch(e2) {}
+  try { await IDB.setAll('parts', state.parts); } catch(e2) {}
+  toast('✓ Received & purchase recorded — UGX ' + total.toLocaleString(), 'success');
+  renderChecklist();
   try {
     await api('savePurchase', purchaseData);
-    await loadAll();
-    renderChecklist();
-    toast('✓ Received & purchase recorded — UGX ' + total.toLocaleString(), 'success');
   } catch(e) {
-    toast('Received but failed to record purchase — add manually in Purchases', 'error');
+    await IDB.addToQueue('savePurchase', purchaseData);
   }
 }
 
@@ -6690,13 +6701,11 @@ async function deleteChecklistItem(itemId) {
   // Optimistic remove
   state.checklist = state.checklist.filter(i => i.ItemID !== itemId);
   renderChecklist();
+  try { await IDB.setAll('checklist', state.checklist); } catch(e2) {}
   try {
     await api('deleteChecklistItem', { ItemID: itemId });
-    const list = await IDB.getAll('checklist');
-    await IDB.setAll('checklist', list.filter(i => i.ItemID !== itemId));
   } catch(e) {
-    toast('Failed to remove — try again', 'error');
-    await loadAll(); renderChecklist();
+    await IDB.addToQueue('deleteChecklistItem', { ItemID: itemId });
   }
 }
 
@@ -6704,24 +6713,24 @@ async function clearReceived() {
   const received = state.checklist.filter(i => i.Status === 'Received');
   if (received.length === 0) return;
   if (!confirm(`Remove ${received.length} received item${received.length>1?'s':''} from checklist?`)) return;
-  toast('Clearing...', 'success');
-  for (const i of received) {
-    try { await api('deleteChecklistItem', { ItemID: i.ItemID }); } catch(e) {}
-  }
-  await loadAll();
+  state.checklist = state.checklist.filter(i => i.Status !== 'Received');
+  try { await IDB.setAll('checklist', state.checklist); } catch(e2) {}
   renderChecklist();
   toast(`✓ Cleared ${received.length} received items`, 'success');
+  for (const i of received) {
+    try { await api('deleteChecklistItem', { ItemID: i.ItemID }); }
+    catch(e) { await IDB.addToQueue('deleteChecklistItem', { ItemID: i.ItemID }); }
+  }
 }
 
 async function clearAllChecklist() {
   if (!confirm(`Remove all ${state.checklist.length} items from checklist?`)) return;
-  toast('Clearing...', 'success');
-  try {
-    await api('clearAllChecklist', {});
-  } catch(e) {}
-  await loadAll();
+  state.checklist = [];
+  try { await IDB.setAll('checklist', []); } catch(e2) {}
   renderChecklist();
   toast('✓ Checklist cleared', 'success');
+  try { await api('clearAllChecklist', {}); }
+  catch(e) { await IDB.addToQueue('clearAllChecklist', {}); }
 }
 
 // ============================================================
