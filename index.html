@@ -2097,9 +2097,11 @@ const BAJAJ_ITEMS = [
   {name:'Raise Cable',cat:'Fuel System',sizes:[],hasBrand:true,move:'Medium'},
   {name:'Raise Handle',cat:'Fuel System',sizes:['Right','Left'],hasBrand:true,move:'Medium'},
   {name:'Carburettor',cat:'Fuel System',sizes:[],hasBrand:true,move:'Slow'},
-  {name:'Air Cleaner',cat:'Oils & Filters',sizes:[],hasBrand:true,move:'Medium'},
-  {name:'Engine Oil',cat:'Oils & Filters',sizes:['1 Litre','4 Litres','Quarts'],hasBrand:true,move:'Fast'},
-  {name:'Oil 2T',cat:'Oils & Filters',sizes:['1 Litre','500ml'],hasBrand:true,move:'Fast'},
+  {name:'Air Cleaner',cat:'Filters',sizes:[],hasBrand:true,move:'Medium'},
+  {name:'Oil Filter',cat:'Filters',sizes:[],hasBrand:true,move:'Medium'},
+  {name:'Fuel Filter',cat:'Filters',sizes:[],hasBrand:true,move:'Medium'},
+  {name:'Engine Oil',cat:'Engine Oil',sizes:['1 Litre','4 Litres','Quarts'],hasBrand:true,move:'Fast'},
+  {name:'Oil 2T',cat:'Engine Oil',sizes:['1 Litre','500ml'],hasBrand:true,move:'Fast'},
   {name:'Hydraulic Fluid',cat:'Hydraulic',sizes:['1 Litre','500ml'],hasBrand:true,move:'Medium'},
   {name:'Hydraulic Brake Oil',cat:'Hydraulic',sizes:['250ml','500ml','1 Litre'],hasBrand:true,move:'Medium'},
   {name:'Front Shock Absorber',cat:'Suspension',sizes:[],hasBrand:true,move:'Medium'},
@@ -3073,7 +3075,7 @@ async function confirmCSVImport(rows, ni, ci, si, bi, costi, selli, qi, mi) {
   showModal(`<div style="padding:32px;text-align:center"><div class="spin" style="font-size:32px">⟳</div><div style="margin-top:12px;font-weight:700">Importing ${rows.length} items...</div></div>`);
 
   let done = 0, skipped = 0;
-  const catMap = {engine:'Engine',transmission:'Transmission',brakes:'Brakes',electrical:'Electrical',body:'Body/Panel',suspension:'Suspension',fuel:'Fuel System',tyre:'Tyres & Tubes',filter:'Oils & Filters',hydraulic:'Hydraulic',bearing:'Bearings & Seals',gasket:'Gaskets'};
+  const catMap = {engine:'Engine',transmission:'Transmission',brakes:'Brakes',electrical:'Electrical',body:'Body/Panel',suspension:'Suspension',fuel:'Fuel System',tyre:'Tyres & Tubes',filter:'Filters',oilcat:'Engine Oil',hydraulic:'Hydraulic',bearing:'Bearings & Seals',gasket:'Gaskets'};
 
   for (const row of rows) {
     const name = (row[ni]||'').trim();
@@ -4444,7 +4446,7 @@ async function confirmCSVImport(rows, ni, ci, si, bi, costi, selli, qi, mi) {
   showModal(`<div style="padding:32px;text-align:center"><div class="spin" style="font-size:32px">⟳</div><div style="margin-top:12px;font-weight:700">Importing ${rows.length} items...</div></div>`);
 
   let done = 0, skipped = 0;
-  const catMap = {engine:'Engine',transmission:'Transmission',brakes:'Brakes',electrical:'Electrical',body:'Body/Panel',suspension:'Suspension',fuel:'Fuel System',tyre:'Tyres & Tubes',filter:'Oils & Filters',hydraulic:'Hydraulic',bearing:'Bearings & Seals',gasket:'Gaskets'};
+  const catMap = {engine:'Engine',transmission:'Transmission',brakes:'Brakes',electrical:'Electrical',body:'Body/Panel',suspension:'Suspension',fuel:'Fuel System',tyre:'Tyres & Tubes',filter:'Engine Oil',hydraulic:'Hydraulic',bearing:'Bearings & Seals',gasket:'Gaskets'};
 
   for (const row of rows) {
     const name = (row[ni]||'').trim();
@@ -9627,7 +9629,8 @@ function guessCat(name) {
   if (/gasket|gasket maker|valve seal/.test(n)) return 'Gaskets';
   if (/bearing|oil seal/.test(n)) return 'Bearings & Seals';
   if (/shock absorber|seal shock|pipe shock/.test(n)) return 'Suspension';
-  if (/air clear|oil filter|engine oil|2t|2-t/.test(n)) return 'Oils & Filters';
+  if (/air clear|oil filter|fuel filter/.test(n)) return 'Filters';
+  if (/engine oil|2t|2-t/.test(n)) return 'Engine Oil';
   if (/hydraulic/.test(n)) return 'Hydraulic';
   if (/raise wire|raise cable|raise handle|choke cable|carb/.test(n)) return 'Fuel System';
   if (/piston|valve|cylinder|crank|timing|oil pump|rocker|tappet|fly wheel|tensioner|engine/.test(n)) return 'Engine';
