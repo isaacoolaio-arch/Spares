@@ -6215,56 +6215,55 @@ function openExpenseEntry(existing) {
     </div>
 
     <!-- Form body -->
-    <div style="flex:1;overflow-y:auto;padding:16px">
+    <div style="flex:1;overflow-y:auto;padding:16px 16px 90px">
 
-      <!-- Amount — big prominent field -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:14px;text-align:center">
-        <div style="font-size:12px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Amount (UGX)</div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px">
-          <span style="font-size:20px;font-weight:800;color:var(--text3)">UGX</span>
-          <input id="exp-amt" type="number" inputmode="numeric" value="${e.Amount||''}" placeholder="0"
-            style="font-size:36px;font-weight:900;color:var(--red);background:none;border:none;outline:none;font-family:var(--font);width:200px;text-align:center" />
-        </div>
-      </div>
-
-      <!-- Category dropdown -->
-      <div style="margin-bottom:14px">
-        <label style="font-size:12px;color:var(--text3);font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;display:block">Category *</label>
-        <select id="exp-cat" style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:14px;font-weight:700">
-          ${EXPENSE_CATEGORIES.map(cat => '<option value="'+cat+'"'+((e.Category||EXPENSE_CATEGORIES[0])===cat?' selected':'')+'>'+cat+'</option>').join('')}
-        </select>
-      </div>
-
-      <!-- Description -->
-      <div style="margin-bottom:14px">
-        <label style="display:block;font-size:12px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Description</label>
-        <input id="exp-desc" value="${e.Description||''}" placeholder="e.g. Monthly rent payment, Kennedy salary..."
-          style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:14px;box-sizing:border-box" />
-      </div>
-
-      <!-- Date + Paid By row -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <!-- Row 1: Date · Category · Description -->
+      <div style="display:grid;grid-template-columns:140px 1fr 1fr;gap:10px;margin-bottom:14px">
         <div>
-          <label style="display:block;font-size:12px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Date</label>
+          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">DATE</div>
           <input id="exp-date" type="date" value="${e.Date||today}"
-            style="width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;box-sizing:border-box" />
+            style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;box-sizing:border-box" />
         </div>
         <div>
-          <label style="display:block;font-size:12px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Paid By</label>
-          <select id="exp-paid" style="width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;box-sizing:border-box">
-            <option ${e.PaidBy==='Cash'||!e.PaidBy?'selected':''}>Cash</option>
-            <option ${e.PaidBy==='Mobile Money'?'selected':''}>Mobile Money</option>
-            <option ${e.PaidBy==='Bank'?'selected':''}>Bank</option>
-            <option ${e.PaidBy==='Credit'?'selected':''}>Credit</option>
+          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">CATEGORY *</div>
+          <select id="exp-cat" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;font-weight:600;box-sizing:border-box">
+            ${EXPENSE_CATEGORIES.map(cat => '<option value="'+cat+'"'+((e.Category||'')===cat?' selected':'')+'>'+cat+'</option>').join('')}
           </select>
         </div>
+        <div>
+          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">DESCRIPTION</div>
+          <input id="exp-desc" value="${e.Description||''}" placeholder="e.g. March rent, salary..."
+            style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;box-sizing:border-box" />
+        </div>
       </div>
 
-      <!-- Notes -->
-      <div style="margin-bottom:80px">
-        <label style="display:block;font-size:12px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Notes (optional)</label>
-        <textarea id="exp-notes" rows="2" placeholder="Any additional notes..."
-          style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;box-sizing:border-box;resize:none">${e.Notes||''}</textarea>
+      <!-- Row 2: Amount (big) -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">AMOUNT (UGX) *</div>
+        <div style="display:flex;align-items:center;background:var(--surface2);border:2px solid rgba(168,85,247,.35);border-radius:12px;padding:4px 14px;gap:8px">
+          <span style="font-size:15px;font-weight:700;color:var(--text3)">UGX</span>
+          <input id="exp-amt" type="number" inputmode="numeric" min="0" value="${e.Amount||''}" placeholder="0"
+            style="flex:1;border:none;background:transparent;font-size:30px;font-weight:900;color:#a855f7;font-family:var(--font);outline:none;padding:8px 0;-moz-appearance:textfield"
+            oninput="this.style.color=this.value>0?'#a855f7':'var(--text3)'" />
+        </div>
+      </div>
+
+      <!-- Row 3: Payment Method · Notes -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">PAYMENT METHOD</div>
+          <select id="exp-paid" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;box-sizing:border-box">
+            <option ${e.PaidBy==='Cash'||!e.PaidBy?'selected':''}>Cash</option>
+            <option ${e.PaidBy==='Mobile Money'?'selected':''}>Mobile Money</option>
+            <option ${e.PaidBy==='Bank Transfer'?'selected':''}>Bank Transfer</option>
+            <option ${e.PaidBy==='Cheque'?'selected':''}>Cheque</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">NOTES <span style="font-weight:400;font-size:9px">(optional)</span></div>
+          <input id="exp-notes" value="${e.Notes||''}" placeholder="Additional details..."
+            style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--font);font-size:13px;box-sizing:border-box" />
+        </div>
       </div>
     </div>
 
