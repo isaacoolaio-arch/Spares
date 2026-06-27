@@ -1497,7 +1497,7 @@ async function smartApi(action, data = {}) {
   const readActions = ['getParts','getSuppliers','getSupplierRates','getSales',
                        'getPurchases','getChecklist','getSettings','verifyPin',
                        'getMyNotifications','verifyEditOtp','generateEditOtp',
-                       'requestEditOtp','getAll','getCoreData','getTransactions'];
+                       'requestEditOtp','getAll','getCoreData','getTransactions','getExpenses'];
 
   if (readActions.includes(action)) {
     if (isOnline) {
@@ -1506,7 +1506,8 @@ async function smartApi(action, data = {}) {
         // Cache fresh read data
         const storeMap = {
           getParts: 'parts', getSuppliers: 'suppliers', getSupplierRates: 'supplierRates',
-          getSales: 'sales', getPurchases: 'purchases', getChecklist: 'checklist'
+          getSales: 'sales', getPurchases: 'purchases', getChecklist: 'checklist',
+          getExpenses: 'expenses'
         };
         if (storeMap[action] && result.data) {
           await IDB.setAll(storeMap[action], result.data);
@@ -1627,6 +1628,10 @@ async function serveFromCache(action, data) {
     // Generic verify (OTP admin check) — use admin PIN
     const adminPin = get('pin', '1234');
     return { success: incoming === adminPin };
+  }
+  if (action === 'getExpenses') {
+    const items = await IDB.getAll('expenses');
+    return { success: true, data: items || [], fromCache: true };
   }
   return { success: false, error: 'Offline and no cache available' };
 }
@@ -2554,6 +2559,7 @@ async function loadAll() {
       state.checklist     = core.checklist     || [];
       state.settings      = core.settings      || {};
       state.expenses      = (expRes && expRes.data) ? expRes.data : state.expenses || [];
+      try { await IDB.setAll('expenses', state.expenses); } catch(e) {}
       state.customers     = core.customers     || [];
       state.sales         = tx.sales           || [];
       state.purchases     = tx.purchases       || [];
@@ -6326,34 +6332,55 @@ async function saveExpenseEntry(existingId) {
   const btn = document.querySelector('#expense-entry-overlay button[onclick^="saveExpenseEntry"]');
   if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
 
-  const data = { ExpenseID: existingId||'', Category: cat, Description: desc, Amount: amt, Date: date, PaidBy: paid, Notes: notes };
-  const res = await api('saveExpense', data);
+  // Generate local ID immediately so offline save works
+  const localId = existingId || ('EXP-' + Date.now());
+  const data = { ExpenseID: localId, Category: cat, Description: desc, Amount: amt, Date: date, PaidBy: paid, Notes: notes };
 
-  if (res.success) {
-    // Update local state
-    if (existingId) {
-      const idx = state.expenses.findIndex(e => e.ExpenseID === existingId);
-      if (idx >= 0) state.expenses[idx] = { ...data };
-    } else {
-      state.expenses.push({ ...data, ExpenseID: res.ExpenseID || ('EXP-'+Date.now()) });
-    }
-    closeExpenseEntry();
-    toast('✓ Expense saved — UGX ' + amt.toLocaleString(), 'success');
-    // Refresh if on expenses tab
-    if (state.currentTxTab === 'expenses') renderExpenses();
+  // ── Optimistic local update first ──
+  if (existingId) {
+    const idx = state.expenses.findIndex(e => e.ExpenseID === existingId);
+    if (idx >= 0) state.expenses[idx] = { ...data };
+    else state.expenses.push({ ...data });
   } else {
-    toast('Failed to save', 'error');
-    if (btn) { btn.textContent = '💾 Save Expense'; btn.disabled = false; }
+    state.expenses.push({ ...data });
+  }
+  // Persist to IDB immediately
+  try { await IDB.setAll('expenses', state.expenses); } catch(e) {}
+
+  closeExpenseEntry();
+  toast('✓ Expense saved — UGX ' + amt.toLocaleString(), 'success');
+  if (state.currentTxTab === 'expenses') renderExpenses();
+
+  // ── Sync to server in background ──
+  try {
+    const res = await api('saveExpense', data);
+    if (res.success && res.ExpenseID && res.ExpenseID !== localId) {
+      // Update with server-assigned ID
+      const idx = state.expenses.findIndex(e => e.ExpenseID === localId);
+      if (idx >= 0) state.expenses[idx].ExpenseID = res.ExpenseID;
+      await IDB.setAll('expenses', state.expenses);
+    }
+  } catch(e) {
+    // Offline — queue for autoSync
+    await IDB.addToQueue('saveExpense', data);
+    toast('Saved offline — will sync when online', 'success');
   }
 }
 
 async function deleteExpenseEntry(id) {
   if (!confirm('Delete this expense?')) return;
+  // Optimistic local delete
   state.expenses = state.expenses.filter(e => e.ExpenseID !== id);
+  try { await IDB.setAll('expenses', state.expenses); } catch(e) {}
   closeExpenseEntry();
-  try { await api('deleteExpense', { ExpenseID: id }); } catch(ex) {}
   if (state.currentTxTab === 'expenses') renderExpenses();
   toast('Expense deleted', 'success');
+  // Sync to server
+  try {
+    await api('deleteExpense', { ExpenseID: id });
+  } catch(e) {
+    await IDB.addToQueue('deleteExpense', { ExpenseID: id });
+  }
 }
 
 
