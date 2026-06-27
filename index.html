@@ -4042,8 +4042,19 @@ async function saveDirectEdit(partId) {
       endSubmit(btn, '✓ Save Changes');
     }
   } catch(e) {
-    toast('Error saving part', 'error');
-    endSubmit(btn, '✓ Save Changes');
+    // Network failure — save optimistically and queue
+    const updData = {
+      PartID: partId, Name: fullName, ItemName: itemName,
+      Size: val('e-size'), Brand: val('e-brand'), PartNo: val('e-brand'),
+      Category: val('e-cat'), CostPrice: val('e-cost'), SellingPrice: val('e-sell'),
+      StockQty: val('e-qty'), ReorderLevel: val('e-reorder'), Unit: val('e-unit'),
+      Movement: val('e-move'), SupplierName: val('e-supplier')||'', CreatedAt: p.CreatedAt||''
+    };
+    const idx = state.parts.findIndex(x => x.PartID === partId);
+    if (idx >= 0) state.parts[idx] = { ...state.parts[idx], ...updData, Name: fullName };
+    await IDB.addToQueue('savePart', updData);
+    closeModal(); renderParts(); renderDashboard();
+    toast(fullName + ' saved offline — will sync when online ✓', 'success');
   }
 }
 
@@ -4885,10 +4896,17 @@ async function saveStockAdj(partId) {
   const newQty = parseInt(document.getElementById('adj-qty')?.value) || 0;
   const part = state.parts.find(p => p.PartID === partId);
   if (!part) return;
-  const res = await api('savePart', { ...part, PartID: partId, StockQty: newQty });
-  if (res.success) {
-    await loadAll(); closeModal(); renderParts(); renderDashboard();
-    toast('Stock updated ✓', 'success');
+  const updData = { ...part, PartID: partId, StockQty: newQty };
+  // Optimistic update
+  const idx = state.parts.findIndex(p => p.PartID === partId);
+  if (idx >= 0) state.parts[idx].StockQty = newQty;
+  closeModal(); renderParts(); renderDashboard();
+  toast('Stock updated ✓', 'success');
+  try {
+    await api('savePart', updData);
+  } catch(e) {
+    await IDB.addToQueue('savePart', updData);
+    toast('Saved offline — will sync when online', 'success');
   }
 }
 
@@ -4912,11 +4930,15 @@ function confirmDeletePart(partId, partName) {
 }
 
 async function deletePart(partId) {
-  const res = await api('deletePart', { PartID: partId });
-  if (res.success) {
-    await loadAll(); closeModal(); renderParts(); renderDashboard();
-    toast('Part deleted', 'success');
-  } else toast('Delete failed', 'error');
+  // Optimistic delete
+  state.parts = state.parts.filter(p => p.PartID !== partId);
+  closeModal(); renderParts(); renderDashboard();
+  toast('Part deleted', 'success');
+  try {
+    await api('deletePart', { PartID: partId });
+  } catch(e) {
+    await IDB.addToQueue('deletePart', { PartID: partId });
+  }
 }
 
 // ============================================================
@@ -4994,22 +5016,37 @@ function showEditSupplierModal(supId) { closeModal(); setTimeout(() => showAddSu
 
 async function saveSupplier(supId) {
   const data = {
-    SupplierID: supId || '',
+    SupplierID: supId || ('SUP-' + Date.now()),
     Name: val('s-name'), Contact: val('s-contact'),
     Location: val('s-loc'), Email: val('s-email'), Notes: val('s-notes')
   };
   if (!data.Name) { toast('Enter supplier name', 'error'); return; }
-  const res = await api('saveSupplier', data);
-  if (res.success) {
-    await loadAll(); closeModal(); renderSuppliers();
-    toast('Supplier saved ✓', 'success');
+  // Optimistic update
+  if (supId) {
+    const idx = state.suppliers.findIndex(s => s.SupplierID === supId);
+    if (idx >= 0) state.suppliers[idx] = { ...state.suppliers[idx], ...data };
+  } else {
+    state.suppliers.push(data);
+  }
+  closeModal(); renderSuppliers();
+  toast('Supplier saved ✓', 'success');
+  try {
+    await api('saveSupplier', data);
+  } catch(e) {
+    await IDB.addToQueue('saveSupplier', data);
+    toast('Saved offline — will sync when online', 'success');
   }
 }
 
 async function deleteSupplier(supId) {
   if (!confirm('Delete this supplier?')) return;
-  const res = await api('deleteSupplier', { SupplierID: supId });
-  if (res.success) { await loadAll(); closeModal(); renderSuppliers(); toast('Deleted'); }
+  state.suppliers = state.suppliers.filter(s => s.SupplierID !== supId);
+  closeModal(); renderSuppliers(); toast('Supplier deleted', 'success');
+  try {
+    await api('deleteSupplier', { SupplierID: supId });
+  } catch(e) {
+    await IDB.addToQueue('deleteSupplier', { SupplierID: supId });
+  }
 }
 
 // ============================================================
@@ -6894,8 +6931,24 @@ async function saveSale() {
       endSubmit(btn, 'Save Sale');
     }
   } catch(e) {
-    toast('Error saving sale', 'error');
-    endSubmit(btn, 'Save Sale');
+    // Queue offline
+    const partVal = val('sl-part').split('||');
+    const custVal = (document.getElementById('sl-customer')?.value || '').split('||');
+    const saleData = {
+      SaleID: 'SAL-' + Date.now() + '-local',
+      Date: val('sl-date'), PartID: partVal[0], PartName: partVal[1],
+      Qty: val('sl-qty'), SellingPrice: val('sl-price'),
+      CustomerID: custVal[0]||'', CustomerName: custVal[1]||'',
+      Notes: val('sl-notes'), RecordedBy: state.currentUser||state.currentRole||'Admin'
+    };
+    state.sales.push(saleData);
+    // Update stock locally
+    const p = state.parts.find(x => x.PartID === partVal[0]);
+    if (p) p.StockQty = Math.max(0, (parseInt(p.StockQty)||0) - (parseInt(saleData.Qty)||1));
+    await IDB.addToQueue('saveSale', saleData);
+    closeModal(); renderDashboard();
+    if (state.currentView === 'transactions') renderTxTab();
+    toast('Sale saved offline — will sync when online ✓', 'success');
   }
 }
 
@@ -7166,8 +7219,25 @@ async function savePurchase() {
       endSubmit(btn, '✓ Add to Stock');
     }
   } catch(e) {
-    toast('Error saving purchase', 'error');
-    endSubmit(btn, '✓ Add to Stock');
+    const partVal = val('pu-part').split('||');
+    const supVal  = val('pu-sup').split('||');
+    const purchData = {
+      PurchaseID: 'PUR-' + Date.now() + '-local',
+      Date: val('pu-date'), PartID: partVal[0], PartName: partVal[1],
+      SupplierID: supVal[0]||'', SupplierName: supVal[1]||'',
+      Qty: val('pu-qty'), CostPrice: val('pu-cost'),
+      updateCostPrice: document.getElementById('pu-updatecost')?.checked ? 'true' : 'false',
+      Notes: val('pu-notes')
+    };
+    state.purchases.push(purchData);
+    // Update stock locally
+    const p = state.parts.find(x => x.PartID === partVal[0]);
+    if (p) p.StockQty = (parseInt(p.StockQty)||0) + (parseInt(purchData.Qty)||0);
+    await IDB.addToQueue('savePurchase', purchData);
+    closeModal();
+    if (state.currentView === 'transactions') renderTxTab();
+    renderDashboard();
+    toast('Purchase saved offline — will sync when online ✓', 'success');
   }
 }
 
@@ -7515,13 +7585,24 @@ async function autoAddLowStock() {
 async function saveChecklistItem() {
   const partVal = val('cl-part').split('||');
   if (!partVal[0]) { toast('Select a part', 'error'); return; }
-  const res = await api('saveChecklistItem', {
+  const data = {
+    ItemID: 'CHK-' + Date.now() + '-local',
     PartID: partVal[0], PartName: partVal[1],
-    TargetQty: val('cl-qty'), Priority: val('cl-priority'), Notes: val('cl-notes')
-  });
-  if (res.success) {
-    await loadAll(); closeModal(); renderTxTab();
-    toast('Added to checklist ✓', 'success');
+    TargetQty: val('cl-qty'), Priority: val('cl-priority'),
+    Notes: val('cl-notes'), Status: 'Pending'
+  };
+  // Optimistic add
+  state.checklist.push(data);
+  closeModal(); renderTxTab();
+  toast('Added to checklist ✓', 'success');
+  try {
+    const res = await api('saveChecklistItem', data);
+    if (res.success && res.ItemID) {
+      const idx = state.checklist.findIndex(c => c.ItemID === data.ItemID);
+      if (idx >= 0) state.checklist[idx].ItemID = res.ItemID;
+    }
+  } catch(e) {
+    await IDB.addToQueue('saveChecklistItem', data);
   }
 }
 
