@@ -4019,42 +4019,34 @@ async function saveDirectEdit(partId) {
   const btn = document.querySelector('#modal-body .btn-primary');
   if (!beginSubmit(btn, 'Saving...')) return;
 
-  try {
-    const res = await api('savePart', {
-      PartID: partId, Name: fullName, ItemName: itemName,
-      Size: size, Brand: brand, PartNo: brand, Description: size,
-      Category: cat, CostPrice: cost, SellingPrice: sell,
-      StockQty: qty, ReorderLevel: reorder, Unit: unit, Movement: move,
-      SupplierName: val('e-supplier') || '', CreatedAt: p.CreatedAt || ''
-    });
+  const partData = {
+    PartID: partId, Name: fullName, ItemName: itemName,
+    Size: size, Brand: brand, PartNo: brand, Description: size,
+    Category: cat, CostPrice: cost, SellingPrice: sell,
+    StockQty: qty, ReorderLevel: reorder, Unit: unit, Movement: move,
+    SupplierName: val('e-supplier') || '', CreatedAt: p.CreatedAt || ''
+  };
 
-    // Save barcode separately if changed
-    const newBarcode = val('e-barcode');
-    if (newBarcode !== (p.Barcode||'')) {
-      await api('saveBarcode', { PartID: partId, Barcode: newBarcode });
-    }
+  // Optimistic local update immediately
+  const pidx = state.parts.findIndex(x => x.PartID === partId);
+  if (pidx >= 0) state.parts[pidx] = { ...state.parts[pidx], ...partData, Name: fullName };
+  try { await IDB.setAll('parts', state.parts); } catch(e2) {}
+  closeModal(); renderParts(); renderDashboard();
+  toast(fullName + ' updated ✓', 'success');
+
+  // Sync to server in background
+  try {
+    const res = await api('savePart', partData);
     if (res.success) {
       await autoSyncRateFromPart(partId, fullName, val('e-supplier') || '', cost);
-      await loadAll(); closeModal(); renderParts(); renderDashboard();
-      toast(fullName + ' updated ✓', 'success');
-    } else {
-      toast(res.error || 'Save failed', 'error');
-      endSubmit(btn, '✓ Save Changes');
+      const newBarcode = val('e-barcode');
+      if (newBarcode && newBarcode !== (p.Barcode||'')) {
+        await api('saveBarcode', { PartID: partId, Barcode: newBarcode });
+      }
     }
   } catch(e) {
-    // Network failure — save optimistically and queue
-    const updData = {
-      PartID: partId, Name: fullName, ItemName: itemName,
-      Size: val('e-size'), Brand: val('e-brand'), PartNo: val('e-brand'),
-      Category: val('e-cat'), CostPrice: val('e-cost'), SellingPrice: val('e-sell'),
-      StockQty: val('e-qty'), ReorderLevel: val('e-reorder'), Unit: val('e-unit'),
-      Movement: val('e-move'), SupplierName: val('e-supplier')||'', CreatedAt: p.CreatedAt||''
-    };
-    const idx = state.parts.findIndex(x => x.PartID === partId);
-    if (idx >= 0) state.parts[idx] = { ...state.parts[idx], ...updData, Name: fullName };
-    await IDB.addToQueue('savePart', updData);
-    closeModal(); renderParts(); renderDashboard();
-    toast(fullName + ' saved offline — will sync when online ✓', 'success');
+    await IDB.addToQueue('savePart', partData);
+    toast(fullName + ' saved offline — syncing later', 'success');
   }
 }
 
@@ -5028,13 +5020,13 @@ async function saveSupplier(supId) {
   } else {
     state.suppliers.push(data);
   }
+  try { await IDB.setAll('suppliers', state.suppliers); } catch(e2) {}
   closeModal(); renderSuppliers();
   toast('Supplier saved ✓', 'success');
   try {
     await api('saveSupplier', data);
   } catch(e) {
     await IDB.addToQueue('saveSupplier', data);
-    toast('Saved offline — will sync when online', 'success');
   }
 }
 
@@ -6945,6 +6937,9 @@ async function saveSale() {
     // Update stock locally
     const p = state.parts.find(x => x.PartID === partVal[0]);
     if (p) p.StockQty = Math.max(0, (parseInt(p.StockQty)||0) - (parseInt(saleData.Qty)||1));
+    // Persist to IDB
+    try { await IDB.setAll('sales', state.sales); } catch(e2) {}
+    try { await IDB.setAll('parts', state.parts); } catch(e2) {}
     await IDB.addToQueue('saveSale', saleData);
     closeModal(); renderDashboard();
     if (state.currentView === 'transactions') renderTxTab();
@@ -7233,6 +7228,9 @@ async function savePurchase() {
     // Update stock locally
     const p = state.parts.find(x => x.PartID === partVal[0]);
     if (p) p.StockQty = (parseInt(p.StockQty)||0) + (parseInt(purchData.Qty)||0);
+    // Persist to IDB
+    try { await IDB.setAll('purchases', state.purchases); } catch(e2) {}
+    try { await IDB.setAll('parts', state.parts); } catch(e2) {}
     await IDB.addToQueue('savePurchase', purchData);
     closeModal();
     if (state.currentView === 'transactions') renderTxTab();
