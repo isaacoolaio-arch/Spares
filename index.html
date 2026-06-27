@@ -2432,7 +2432,7 @@ async function checkPin() {
     const res = await api('verifyPin', { pin: pinInput, role: loginRole });
     if (res.success) {
       state.currentRole = res.role || loginRole;
-      state.currentUser = res.name || loginRole;
+      state.currentUser = res.name || (loginRole === 'admin' ? 'Admin' : loginRole);
       document.getElementById('pin-screen').style.display = 'none';
       document.getElementById('app').classList.add('visible');
       applyRoleUI();
