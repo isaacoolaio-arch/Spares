@@ -6532,9 +6532,10 @@ function printOrderedList() {
   // Temporarily set selection to all ordered items for printing
   const prev = window._clSelected;
   window._clSelected = new Set(orderedItems.map(i => i.ItemID));
+  // Always refresh qty from current TargetQty so checklist edits are reflected
+  if (!window._clQtys) window._clQtys = {};
   orderedItems.forEach(i => {
-    if (!window._clQtys) window._clQtys = {};
-    if (!window._clQtys[i.ItemID]) window._clQtys[i.ItemID] = parseInt(i.TargetQty)||1;
+    window._clQtys[i.ItemID] = parseInt(i.TargetQty)||1;
   });
   printChecklistOrder();
   window._clSelected = prev;
