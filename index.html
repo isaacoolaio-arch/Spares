@@ -6617,15 +6617,15 @@ function printChecklistOrder() {
       + '<table style="width:100%;border-collapse:collapse;font-size:13px" class="po-table">'
       + '<thead><tr style="background:#f5f5f5">'
       + '<th class="no-print" style="padding:4px;border:none;width:22px"></th>'
-      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:left;min-width:180px">Part Name</th>'
-      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Size/Spec</th>'
-      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Supplier</th>'
-      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:right">Unit Cost</th>'
-      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Qty</th>'
-      + '<th class="extra-col" style="padding:8px 4px;border:1px solid #ddd;text-align:center">'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:left;min-width:180px;font-weight:800;color:#111;font-size:12px">Part Name</th>'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center;font-weight:800;color:#111;font-size:12px">Size/Spec</th>'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center;font-weight:800;color:#111;font-size:12px">Supplier</th>'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:right;font-weight:800;color:#111;font-size:12px">Unit Cost</th>'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center;font-weight:800;color:#111;font-size:12px">Qty</th>'
+      + '<th class="extra-col" style="padding:8px 4px;border:1px solid #ddd;text-align:center;background:#f5f5f5">'
       +   '<input id="extra-col-header" type="text" value="Pack/Unit" placeholder="Column name"'
-      +   ' style="width:80px;border:2px solid #f5a623;border-radius:4px;padding:2px 4px;text-align:center;font-size:12px;font-weight:700;font-family:Arial;background:#fffbeb" /></th>'
-      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:right">Amount</th>'
+      +   ' style="width:85px;border:2px solid #f5a623;border-radius:4px;padding:3px 6px;text-align:center;font-size:12px;font-weight:800;font-family:Arial;background:#fffbeb;color:#111" /></th>'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:right;font-weight:800;color:#111;font-size:12px">Amount</th>'
       + '</tr></thead><tbody id="tbody-' + sup.replace(/[^a-z0-9]/gi,'') + '">' + rows + '</tbody>'
       + '<tfoot><tr style="background:#fff8e6">'
       + '<td colspan="5" style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-weight:800;font-size:13px">Subtotal (' + sup + ')</td>'
@@ -6703,11 +6703,13 @@ function printChecklistOrder() {
       body > *:not(#print-overlay) { display:none!important; }
       #print-overlay { position:static!important; overflow:visible!important; }
       .no-print { display:none!important; }
-      .print-edit-input { border:none!important; background:transparent!important; -webkit-appearance:none; padding:2px!important; }
-      #extra-col-header { border:none!important; background:transparent!important; font-weight:700; color:#111; }
+      input, .print-edit-input { border:none!important; background:transparent!important; -webkit-appearance:none; box-shadow:none!important; outline:none!important; }
+      #extra-col-header { font-weight:800; color:#111; font-size:12px; }
     }
     .print-edit-input { background:#fff; }
-    input:focus { outline:2px solid #f5a623; outline-offset:1px; }
+    input[type=number], input[type=text] { border:1.5px solid #e5e7eb; border-radius:6px; background:#fff; color:#111; }
+    input[type=number]:focus, input[type=text]:focus { outline:2px solid #f5a623; outline-offset:1px; border-color:#f5a623; }
+    thead th { font-weight:800; font-size:12px; color:#111; letter-spacing:0.3px; }
   </style>
   <script>
     function recalcPrintRow(inp) {
