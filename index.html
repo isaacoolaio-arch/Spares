@@ -6152,6 +6152,7 @@ function renderChecklist() {
       <div style="font-size:11px;color:var(--text3)">☑ Select to order · tap ⟳ to cycle</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         ${allOrdered.length > 0 ? `<button onclick="printOrderedList()" style="background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);color:var(--accent);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">🖨 Print ordered (${allOrdered.length})</button>` : ''}
+      <button onclick="showPrintHistory()" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:var(--blue);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">📋 Order History</button>
         ${allReceived.length > 0 ? `<button onclick="clearReceived()" style="background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:var(--green);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">🗑 Clear ${allReceived.length} received</button>` : ''}
         <button onclick="clearAllChecklist()" style="background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.25);color:var(--red);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✕ Clear all</button>
       </div>
@@ -6652,6 +6653,20 @@ function printChecklistOrder() {
     + '</div>'
     + '</body></html>';
 
+  // Save this order to print history
+  const orderRecord = {
+    id: 'PO-' + Date.now(),
+    date: today,
+    shop, items: selectedItems.length,
+    grandTotal,
+    suppliers: Object.keys(bySupplier),
+    bySupplier: JSON.parse(JSON.stringify(bySupplier))
+  };
+  if (!window._printHistory) window._printHistory = [];
+  window._printHistory.unshift(orderRecord);
+  window._printHistory = window._printHistory.slice(0, 20); // keep last 20
+  try { IDB.set('printHistory', JSON.stringify(window._printHistory)).catch(()=>{}); } catch(e) {}
+
   // Show in a full-screen overlay inside the app (avoids popup blocker)
   const overlay = document.createElement('div');
   overlay.id = 'print-overlay';
@@ -6699,6 +6714,159 @@ function printChecklistOrder() {
     + '<div style="padding:20px;max-width:900px;margin:0 auto">' + html.replace('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Order - ' + shop + '</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#111}@media print{body{padding:10px}.no-print{display:none!important}button{display:none}}</style></head><body>', '').replace('</body></html>', '') + '</div>';
 
   // Remove the buttons inside the embedded html since we have overlay controls
+  document.body.appendChild(overlay);
+}
+
+async function showPrintHistory() {
+  // Load from IDB if not in memory
+  if (!window._printHistory) {
+    try {
+      const saved = await IDB.get('printHistory');
+      window._printHistory = saved ? JSON.parse(saved) : [];
+    } catch(e) { window._printHistory = []; }
+  }
+
+  const history = window._printHistory || [];
+
+  if (history.length === 0) {
+    showModal(`
+      <div class="modal-header">
+        <div class="modal-title">📋 Order History</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div style="text-align:center;padding:24px;color:var(--text3)">
+        <div style="font-size:36px;margin-bottom:12px">📭</div>
+        <div>No past orders yet.<br>Print an order and it will appear here.</div>
+      </div>
+    `);
+    return;
+  }
+
+  const rows = history.map((o, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700">${o.date} · ${o.items} parts</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${o.suppliers.join(', ')}</div>
+        <div style="font-size:12px;font-weight:800;color:var(--accent)">UGX ${(o.grandTotal||0).toLocaleString()}</div>
+      </div>
+      <button onclick="reopenPrintOrder(${i})" style="background:var(--accent);border:none;color:#000;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--font);flex-shrink:0">✏️ Edit & Print</button>
+    </div>
+  `).join('');
+
+  showModal(`
+    <div class="modal-header">
+      <div class="modal-title">📋 Order History</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Tap "Edit & Print" to reopen and edit any past order</div>
+    ${rows}
+  `);
+}
+
+async function reopenPrintOrder(historyIndex) {
+  const order = (window._printHistory || [])[historyIndex];
+  if (!order) return;
+  closeModal();
+
+  const shop  = state.settings.shopName  || 'Oola Spares';
+  const owner = state.settings.ownerName || '';
+  const phone = state.settings.phone     || '';
+
+  // Rebuild supplier sections from saved data
+  let supplierSections = '';
+  let grandTotal = order.grandTotal || 0;
+
+  Object.entries(order.bySupplier).forEach(([sup, items]) => {
+    const supTotal = items.reduce((s,i) => s+(i.amount||0), 0);
+    let rows = '';
+    items.forEach((item, idx) => {
+      const imgCell = item.imageUrl
+        ? `<img src="${item.imageUrl}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #eee" onerror="this.style.display='none'" />`
+        : '<div style="width:44px;height:44px;border-radius:6px;border:1px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:18px;color:#ccc">🔩</div>';
+      const rowId = 'pr-' + sup.replace(/\s/g,'') + idx;
+      rows += `<tr style="background:${idx%2===0?'#fff':'#f9f9f9'}" id="${rowId}">
+        <td style="padding:6px 10px;border:1px solid #ddd;vertical-align:middle">
+          <div style="display:flex;align-items:center;gap:10px">
+            ${imgCell}
+            <div><div style="font-weight:700;font-size:13px">${item.name}</div>
+            ${item.size && item.size!=='—'?`<div style="font-size:11px;color:#777">${item.size}</div>`:''}
+            </div></div></td>
+        <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;font-size:12px">${item.size}</td>
+        <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;font-size:12px">${sup}</td>
+        <td style="padding:6px 10px;border:1px solid #ddd;text-align:right">
+          <input type="number" min="0" value="${item.unitCost||0}" data-row="${rowId}" data-field="cost"
+            onchange="recalcPrintRow(this)" class="print-edit-input"
+            style="width:90px;border:1px solid #ddd;border-radius:4px;padding:3px 6px;text-align:right;font-size:13px;font-family:Arial" /></td>
+        <td style="padding:6px 10px;border:1px solid #ddd;text-align:center">
+          <input type="number" min="1" value="${item.qty||1}" data-row="${rowId}" data-field="qty"
+            onchange="recalcPrintRow(this)" class="print-edit-input"
+            style="width:55px;border:1px solid #ddd;border-radius:4px;padding:3px 6px;text-align:center;font-size:14px;font-weight:800;font-family:Arial" /></td>
+        <td id="${rowId}-amt" style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">
+          ${item.amount>0?'UGX '+item.amount.toLocaleString():'—'}</td>
+      </tr>`;
+    });
+
+    supplierSections += `<div style="margin-bottom:24px">
+      <div style="background:#1a1a2e;color:#f5a623;padding:8px 12px;font-weight:800;font-size:13px;border-radius:6px 6px 0 0;display:flex;align-items:center;gap:6px">
+        📦 ${sup}<span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.6)">${items.length} part${items.length>1?'s':''}</span></div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#f5f5f5">
+          <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;min-width:200px">Part Name</th>
+          <th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Size/Spec</th>
+          <th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Supplier</th>
+          <th style="padding:8px 10px;border:1px solid #ddd;text-align:right">Unit Cost</th>
+          <th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Qty</th>
+          <th style="padding:8px 10px;border:1px solid #ddd;text-align:right">Amount</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr style="background:#fff8e6">
+          <td colspan="5" style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-weight:800">Subtotal (${sup})</td>
+          <td style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-weight:900;color:#d97706">${supTotal>0?'UGX '+supTotal.toLocaleString():'—'}</td>
+        </tr></tfoot>
+      </table></div>`;
+  });
+
+  const html = `${order.date} · Reopened order`;
+  const tagline = `${order.items} part${order.items>1?'s':''} from ${order.suppliers.length} supplier${order.suppliers.length>1?'s':''}`;
+
+  // Reuse the print overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'print-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:99999;overflow:auto';
+
+  const controls = '<div style="position:sticky;top:0;background:#1a1a2e;padding:10px 16px;display:flex;gap:10px;justify-content:space-between;align-items:center;z-index:1">'
+    + '<span style="color:#f5a623;font-weight:800;font-size:14px">📋 ' + order.date + ' Order — Edit & Reprint</span>'
+    + '<div style="display:flex;gap:8px">'
+    + '<button onclick="window.print()" style="background:#f5a623;color:#000;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">🖨 Print / Save PDF</button>'
+    + '<button onclick="closePrintOverlay()" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✕ Close</button>'
+    + '</div></div>'
+    + '<div style="background:#fffbeb;border:1px solid #f5a623;border-radius:8px;padding:8px 16px;margin:8px 16px 0;font-size:12px;color:#92400e">✏️ <strong>Edit mode:</strong> Change <span style="background:#fffbeb;border:1px dashed #f5a623;padding:1px 6px;border-radius:3px">Qty</span> and <span style="background:#fffbeb;border:1px dashed #f5a623;padding:1px 6px;border-radius:3px">Unit Cost</span> — totals update automatically.</div>';
+
+  const printStyleStr = `<style>
+    @media print { #print-controls{display:none!important} body>*:not(#print-overlay){display:none!important} #print-overlay{position:static!important;overflow:visible!important} .print-edit-input{border:none!important;background:transparent!important} }
+    .print-edit-input{background:#fffbeb;border:1px dashed #f5a623;border-radius:4px}
+  </style>
+  <script>
+    function recalcPrintRow(inp){var r=inp.dataset.row;var c=document.querySelector('[data-row="'+r+'"][data-field="cost"]');var q=document.querySelector('[data-row="'+r+'"][data-field="qty"]');if(!c||!q)return;var a=(parseFloat(c.value)||0)*(parseInt(q.value)||0);var el=document.getElementById(r+'-amt');if(el)el.textContent=a>0?'UGX '+a.toLocaleString():'—';recalcPrintTotals();}
+    function recalcPrintTotals(){var cs=document.querySelectorAll('[id$="-amt"]');var g=0;cs.forEach(function(c){var n=parseInt((c.textContent||'').replace(/[^0-9]/g,''));if(n)g+=n;});var el=document.getElementById('grand-total-amt');if(el)el.textContent='UGX '+g.toLocaleString();}
+  <\/script>`;
+
+  overlay.innerHTML = printStyleStr
+    + '<div id="print-controls">' + controls + '</div>'
+    + '<div style="padding:20px;max-width:900px;margin:0 auto">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #1a1a2e">'
+    + '<div><div style="font-size:24px;font-weight:900;color:#1a1a2e">' + shop + '</div>'
+    + (owner?'<div style="font-size:12px;color:#555">Owner: '+owner+'</div>':'')
+    + (phone?'<div style="font-size:12px;color:#555">Tel: '+phone+'</div>':'')
+    + '<div style="font-size:11px;color:#999;margin-top:4px;font-style:italic">' + tagline + '</div></div>'
+    + '<div style="text-align:right"><div style="font-size:20px;font-weight:900;color:#d97706">PURCHASE ORDER</div>'
+    + '<div style="font-size:12px;color:#777;margin-top:4px">Date: ' + order.date + '</div></div></div>'
+    + supplierSections
+    + '<div style="margin-top:16px;padding:14px 18px;background:#1a1a2e;color:#fff;border-radius:10px;display:flex;justify-content:space-between;align-items:center">'
+    + '<div style="font-size:16px;font-weight:800">GRAND TOTAL</div>'
+    + '<div id="grand-total-amt" style="font-size:22px;font-weight:900;color:#f5a623">UGX ' + (grandTotal||0).toLocaleString() + '</div>'
+    + '</div></div>';
+
   document.body.appendChild(overlay);
 }
 
