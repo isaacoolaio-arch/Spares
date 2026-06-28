@@ -6576,49 +6576,64 @@ function printChecklistOrder() {
     const supTotal = items.reduce((s,i) => s+i.amount, 0);
     let rows = '';
     items.forEach((item, idx) => {
+      const safeRowId = 'pr-' + idx + '-' + Math.random().toString(36).slice(2,6);
       const imgCell = item.imageUrl
-        ? '<img src="' + item.imageUrl + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #eee;display:block" onerror="this.style.display=&quot;none&quot;" />'
-        : '<div style="width:44px;height:44px;border-radius:6px;border:1px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:18px;color:#ccc">🔩</div>';
-      const rowId = 'pr-' + sup.replace(/\s/g,'') + idx;
-      rows += '<tr style="background:' + (idx%2===0?'#fff':'#f9f9f9') + '" id="' + rowId + '">'
-        + '<td style="padding:6px 10px;border:1px solid #ddd;vertical-align:middle">'
-        +   '<div style="display:flex;align-items:center;gap:10px">'
-        +   imgCell
-        +   '<div><div style="font-weight:700;font-size:13px">' + item.name + '</div>'
+        ? '<img src="' + item.imageUrl + '" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #eee;display:block" onerror="this.style.display=\'none\';" />'
+        : '<div style="width:40px;height:40px;border-radius:6px;border:1px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:16px;color:#ccc">🔩</div>';
+      rows += '<tr id="' + safeRowId + '" style="background:' + (idx%2===0?'#fff':'#f9f9f9') + '">'
+        // Delete row btn (no-print)
+        + '<td class="no-print" style="padding:2px;border:none;width:22px"><button onclick="deletePrintRow(\'' + safeRowId + '\')" title="Remove row" style="background:#fee2e2;border:none;color:#dc2626;border-radius:4px;width:22px;height:22px;cursor:pointer;font-size:13px;line-height:1">×</button></td>'
+        // Part name + image
+        + '<td style="padding:6px 8px;border:1px solid #ddd;vertical-align:middle">'
+        +   '<div style="display:flex;align-items:center;gap:8px">' + imgCell
+        +   '<div><div style="font-weight:700;font-size:13px;color:#111">' + item.name + '</div>'
         +   (item.size && item.size !== '—' ? '<div style="font-size:11px;color:#777">' + item.size + '</div>' : '')
-        +   '</div></div>'
-        + '</td>'
-        + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center;font-size:12px;color:#555">' + item.size + '</td>'
-        + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center;font-size:12px;color:#555">' + sup + '</td>'
-        + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-size:13px" class="no-print-border">'
-        +   '<input type="number" min="0" value="' + (item.unitCost||0) + '" data-row="' + rowId + '" data-field="cost"'
-        +   ' onchange="recalcPrintRow(this)" class="print-edit-input" style="width:90px;border:1px solid #ddd;border-radius:4px;padding:3px 6px;text-align:right;font-size:13px;font-family:Arial" />'
-        + '</td>'
-        + '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center">'
-        +   '<input type="number" min="1" value="' + item.qty + '" data-row="' + rowId + '" data-field="qty"'
-        +   ' onchange="recalcPrintRow(this)" class="print-edit-input" style="width:55px;border:1px solid #ddd;border-radius:4px;padding:3px 6px;text-align:center;font-size:14px;font-weight:800;font-family:Arial" />'
-        + '</td>'
-        + '<td id="' + rowId + '-amt" style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">'
-        +   (item.amount > 0 ? 'UGX ' + item.amount.toLocaleString() : '—')
-        + '</td>'
+        +   '</div></div></td>'
+        // Size/Spec
+        + '<td style="padding:6px 8px;border:1px solid #ddd;text-align:center;font-size:12px;color:#555">' + item.size + '</td>'
+        // Supplier
+        + '<td style="padding:6px 8px;border:1px solid #ddd;text-align:center;font-size:12px;color:#555">' + sup + '</td>'
+        // Unit Cost — VISIBLE input
+        + '<td style="padding:4px 6px;border:1px solid #ddd;text-align:right">'
+        +   '<input type="number" min="0" value="' + (item.unitCost||0) + '" data-row="' + safeRowId + '" data-field="cost"'
+        +   ' onchange="recalcPrintRow(this)" class="print-edit-input"'
+        +   ' style="width:85px;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;text-align:right;font-size:13px;font-weight:700;font-family:Arial;color:#111;background:#fff" /></td>'
+        // Qty — VISIBLE input
+        + '<td style="padding:4px 6px;border:1px solid #ddd;text-align:center">'
+        +   '<input type="number" min="0" value="' + item.qty + '" data-row="' + safeRowId + '" data-field="qty"'
+        +   ' onchange="recalcPrintRow(this)" class="print-edit-input"'
+        +   ' style="width:50px;border:2px solid #d1d5db;border-radius:6px;padding:4px 4px;text-align:center;font-size:14px;font-weight:900;font-family:Arial;color:#111;background:#fff" /></td>'
+        // Extra column (description)
+        + '<td class="extra-col" style="padding:4px 6px;border:1px solid #ddd;text-align:center">'
+        +   '<input type="text" placeholder="e.g. 1 Jerry can" class="print-edit-input extra-col-input"'
+        +   ' style="width:90px;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;text-align:center;font-size:12px;font-family:Arial;color:#111;background:#fff" /></td>'
+        // Amount
+        + '<td id="' + safeRowId + '-amt" style="padding:6px 8px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">'
+        +   (item.amount > 0 ? 'UGX ' + item.amount.toLocaleString() : '—') + '</td>'
         + '</tr>';
     });
     supplierSections += '<div style="margin-bottom:24px">'
       + '<div style="background:#1a1a2e;color:#f5a623;padding:8px 12px;font-weight:800;font-size:13px;border-radius:6px 6px 0 0;display:flex;align-items:center;gap:6px">📦 ' + sup + '<span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.6)">' + items.length + ' part' + (items.length>1?'s':'') + '</span></div>'
-      + '<table style="width:100%;border-collapse:collapse;font-size:13px">'
+      + '<table style="width:100%;border-collapse:collapse;font-size:13px" class="po-table">'
       + '<thead><tr style="background:#f5f5f5">'
-      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:left;min-width:200px">Part Name</th>'
+      + '<th class="no-print" style="padding:4px;border:none;width:22px"></th>'
+      + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:left;min-width:180px">Part Name</th>'
       + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Size/Spec</th>'
       + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Supplier</th>'
       + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:right">Unit Cost</th>'
       + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:center">Qty</th>'
+      + '<th class="extra-col" style="padding:8px 4px;border:1px solid #ddd;text-align:center">'
+      +   '<input id="extra-col-header" type="text" value="Pack/Unit" placeholder="Column name"'
+      +   ' style="width:80px;border:2px solid #f5a623;border-radius:4px;padding:2px 4px;text-align:center;font-size:12px;font-weight:700;font-family:Arial;background:#fffbeb" /></th>'
       + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:right">Amount</th>'
-      + '</tr></thead><tbody>' + rows + '</tbody>'
+      + '</tr></thead><tbody id="tbody-' + sup.replace(/[^a-z0-9]/gi,'') + '">' + rows + '</tbody>'
       + '<tfoot><tr style="background:#fff8e6">'
       + '<td colspan="5" style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-weight:800;font-size:13px">Subtotal (' + sup + ')</td>'
       + '<td style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-weight:900;color:#d97706;font-size:14px">' + (supTotal > 0 ? 'UGX ' + supTotal.toLocaleString() : '—') + '</td>'
       + '</tr></tfoot>'
-      + '</table></div>';
+      + '</table>'
+      + '<button onclick="addPrintRow(\'tbody-' + sup.replace(/[^a-z0-9]/gi,'') + '\'" class="no-print" style="width:100%;margin-top:4px;padding:6px;border:2px dashed #d1d5db;border-radius:8px;background:#f9fafb;color:#555;font-size:12px;font-weight:700;cursor:pointer;font-family:Arial">+ Add row to ' + sup + '</button>'
+      + '</div>';
   });
 
   // Tagline under shop name
@@ -6673,11 +6688,12 @@ function printChecklistOrder() {
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:99999;overflow:auto';
 
   // Add close + print buttons at top
-  const controls = '<div style="position:sticky;top:0;background:#1a1a2e;padding:10px 16px;display:flex;gap:10px;justify-content:space-between;align-items:center;z-index:1">'
+  const controls = '<div style="position:sticky;top:0;background:#1a1a2e;padding:8px 16px;display:flex;gap:8px;justify-content:space-between;align-items:center;z-index:1;flex-wrap:wrap">'
     + '<span style="color:#f5a623;font-weight:800;font-size:14px">📋 Purchase Order Preview</span>'
-    + '<div style="display:flex;gap:8px">'
-    + '<button onclick="window.print()" style="background:#f5a623;color:#000;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">🖨 Print / Save PDF</button>'
-    + '<button onclick="closePrintOverlay()" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✕ Close</button>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    + '<button onclick="toggleExtraCol(this)" data-visible="1" style="background:rgba(245,166,35,.2);color:#f5a623;border:1px solid rgba(245,166,35,.4);padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">− Hide Pack/Unit column</button>'
+    + '<button onclick="window.print()" style="background:#f5a623;color:#000;border:none;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer">🖨 Print / Save PDF</button>'
+    + '<button onclick="closePrintOverlay()" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Close</button>'
     + '</div></div>';
 
   // Add print CSS to hide the overlay controls when printing
@@ -6686,27 +6702,56 @@ function printChecklistOrder() {
       #print-controls { display:none!important; }
       body > *:not(#print-overlay) { display:none!important; }
       #print-overlay { position:static!important; overflow:visible!important; }
-      .print-edit-input { border:none!important; background:transparent!important; -webkit-appearance:none; }
+      .no-print { display:none!important; }
+      .print-edit-input { border:none!important; background:transparent!important; -webkit-appearance:none; padding:2px!important; }
+      #extra-col-header { border:none!important; background:transparent!important; font-weight:700; color:#111; }
     }
-    .print-edit-input { background:#fffbeb; border:1px dashed #f5a623; border-radius:4px; }
+    .print-edit-input { background:#fff; }
+    input:focus { outline:2px solid #f5a623; outline-offset:1px; }
   </style>
   <script>
     function recalcPrintRow(inp) {
       var row = inp.dataset.row;
-      var costEl = document.querySelector('[data-row="' + row + '"][data-field="cost"]');
-      var qtyEl  = document.querySelector('[data-row="' + row + '"][data-field="qty"]');
+      var costEl = document.querySelector('[data-row="'+row+'"][data-field="cost"]');
+      var qtyEl  = document.querySelector('[data-row="'+row+'"][data-field="qty"]');
       if (!costEl || !qtyEl) return;
       var amt = (parseFloat(costEl.value)||0) * (parseInt(qtyEl.value)||0);
-      var cell = document.getElementById(row + '-amt');
-      if (cell) cell.textContent = amt > 0 ? 'UGX ' + amt.toLocaleString() : '—';
+      var cell = document.getElementById(row+'-amt');
+      if (cell) cell.textContent = amt>0 ? 'UGX '+amt.toLocaleString() : '—';
       recalcPrintTotals();
     }
     function recalcPrintTotals() {
-      var amtCells = document.querySelectorAll('[id$="-amt"]');
-      var grand = 0;
-      amtCells.forEach(function(c) { var n = parseInt((c.textContent||'').replace(/[^0-9]/g,'')); if(n) grand += n; });
+      var cs = document.querySelectorAll('[id$="-amt"]');
+      var g = 0;
+      cs.forEach(function(c){var n=parseInt((c.textContent||'').replace(/[^0-9]/g,''));if(n)g+=n;});
       var el = document.getElementById('grand-total-amt');
-      if (el) el.textContent = 'UGX ' + grand.toLocaleString();
+      if(el) el.textContent = 'UGX '+g.toLocaleString();
+    }
+    function deletePrintRow(rowId) {
+      var row = document.getElementById(rowId);
+      if (row) { row.parentNode.removeChild(row); recalcPrintTotals(); }
+    }
+    function addPrintRow(tbodyId) {
+      var tbody = document.getElementById(tbodyId);
+      if (!tbody) return;
+      var newId = 'pr-new-'+Date.now();
+      var extraVis = document.querySelector('.extra-col') ? (document.querySelector('.extra-col').style.display!=='none') : true;
+      var tr = document.createElement('tr');
+      tr.id = newId; tr.style.background = '#fff';
+      tr.innerHTML =
+        '<td class="no-print" style="padding:2px;border:none;width:22px"><button onclick="deletePrintRow(''+newId+'')" style="background:#fee2e2;border:none;color:#dc2626;border-radius:4px;width:22px;height:22px;cursor:pointer;font-size:13px">×</button></td>'
+        +'<td style="padding:4px 8px;border:1px solid #ddd" colspan="3"><input type="text" placeholder="Part name..." style="width:100%;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;font-size:13px;font-weight:700;font-family:Arial;color:#111;box-sizing:border-box" /></td>'
+        +'<td style="padding:4px 6px;border:1px solid #ddd"><input type="number" min="0" value="0" data-row="'+newId+'" data-field="cost" onchange="recalcPrintRow(this)" style="width:85px;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;text-align:right;font-size:13px;font-weight:700;font-family:Arial;color:#111" /></td>'
+        +'<td style="padding:4px 6px;border:1px solid #ddd"><input type="number" min="0" value="1" data-row="'+newId+'" data-field="qty" onchange="recalcPrintRow(this)" style="width:50px;border:2px solid #d1d5db;border-radius:6px;padding:4px 4px;text-align:center;font-size:14px;font-weight:900;font-family:Arial;color:#111" /></td>'
+        +'<td class="extra-col" style="padding:4px 6px;border:1px solid #ddd;display:'+(extraVis?'':'none')+'"><input type="text" class="extra-col-input" placeholder="e.g. 1 Jerry can" style="width:90px;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;font-size:12px;font-family:Arial;color:#111" /></td>'
+        +'<td id="'+newId+'-amt" style="padding:6px 8px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">—</td>';
+      tbody.appendChild(tr);
+    }
+    function toggleExtraCol(btn) {
+      var show = btn.dataset.visible === '0';
+      document.querySelectorAll('.extra-col').forEach(function(el){ el.style.display = show ? '' : 'none'; });
+      btn.dataset.visible = show ? '1' : '0';
+      btn.textContent = show ? '− Hide Pack/Unit column' : '+ Show Pack/Unit column';
     }
   <\/script>`;
 
