@@ -6028,8 +6028,7 @@ function renderChecklist() {
       html += '<div style="flex:1;min-width:0">'
         + '<div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + i.PartName + stockBadge + '</div>'
         + '<div style="font-size:11px;color:var(--text3);margin-top:2px">'
-        + 'Qty: ' + i.TargetQty
-        + ''
+        + '<span data-iid="' + i.ItemID + '" data-qty="' + i.TargetQty + '" onclick="editChecklistQty(this)" style="cursor:pointer;color:var(--accent);font-weight:800;border-bottom:1px dashed var(--accent)">Qty: ' + (i.TargetQty||1) + '</span> <span style="font-size:10px;color:var(--text3)">(tap to edit)</span>'
         + (supplier ? ' &nbsp;·&nbsp; ' + supplier : '')
         + '</div></div>';
 
@@ -6670,6 +6669,52 @@ function printChecklistOrder() {
 function closePrintOverlay() {
   const el = document.getElementById('print-overlay');
   if (el) el.remove();
+}
+
+function editChecklistQty(el) {
+  const itemId = el.dataset.iid;
+  const currentQty = parseInt(el.dataset.qty) || 1;
+  const item = state.checklist.find(i => i.ItemID === itemId);
+  if (!item) return;
+  const part = state.parts.find(p => p.PartID === item.PartID) || {};
+  const costPrice = parseFloat(part.CostPrice) || 0;
+
+  showModal(`
+    <div class="modal-header">
+      <div class="modal-title">Edit Quantity</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px">${item.PartName}</div>
+    ${part.SupplierName ? '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">'+part.SupplierName+'</div>' : ''}
+    <label>Quantity to Order</label>
+    <input id="cl-edit-qty" type="number" min="1" value="${currentQty}"
+      style="font-size:28px;font-weight:900;text-align:center;color:var(--accent)"
+      oninput="document.getElementById('cl-qty-total').textContent='UGX '+((${costPrice}*(parseInt(this.value)||1)).toLocaleString())" />
+    <div id="cl-qty-total" style="text-align:center;font-size:16px;font-weight:800;color:var(--accent);margin-top:6px">${costPrice > 0 ? 'UGX '+(costPrice*currentQty).toLocaleString() : ''}</div>
+    <input type="hidden" id="cl-edit-iid" value="${itemId}" />
+    <button class="btn btn-primary" onclick="saveChecklistQty()">✓ Save Quantity</button>
+  `);
+  setTimeout(() => {
+    const inp = document.getElementById('cl-edit-qty');
+    if (inp) { inp.select(); inp.focus(); }
+  }, 100);
+}
+
+async function saveChecklistQty() {
+  const itemId = document.getElementById('cl-edit-iid').value;
+  const qty    = parseInt(document.getElementById('cl-edit-qty').value) || 1;
+  const item   = state.checklist.find(i => i.ItemID === itemId);
+  if (!item) { closeModal(); return; }
+  item.TargetQty = qty;
+  try { await IDB.setAll('checklist', state.checklist); } catch(e) {}
+  closeModal();
+  renderChecklist();
+  toast('Qty updated to ' + qty, 'success');
+  try {
+    await api('updateChecklistStatus', { ItemID: itemId, Status: item.Status, TargetQty: qty });
+  } catch(e) {
+    await IDB.addToQueue('updateChecklistStatus', { ItemID: itemId, Status: item.Status, TargetQty: qty });
+  }
 }
 
 function updateChecklistQty(itemId, qty) {
