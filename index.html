@@ -6646,9 +6646,12 @@ function printChecklistOrder() {
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8">'
     + '<title>Purchase Order - ' + shop + '</title>'
     + '<style>'
+    + '@page{margin:12mm}'
     + 'body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#111;background:#fff}'
     + 'img{max-width:100%}'
-    + '@media print{.no-print{display:none!important}}'
+    + 'input,textarea{border:none!important;background:transparent!important;-webkit-appearance:none;box-shadow:none!important;outline:none!important;font-family:Arial,sans-serif}'
+    + 'thead th{font-weight:800;font-size:12px;color:#111}'
+    + '@media print{.no-print{display:none!important}input,textarea{border:none!important;background:transparent!important}}'
     + '</style></head><body>'
     // Header
     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #1a1a2e">'
@@ -6689,6 +6692,9 @@ function printChecklistOrder() {
   window._printHistory.unshift(orderRecord);
   window._printHistory = window._printHistory.slice(0, 20); // keep last 20
   try { IDB.set('printHistory', JSON.stringify(window._printHistory)).catch(()=>{}); } catch(e) {}
+
+  // Store for printFromOverlay
+  window._lastPrintHTML = html;
 
   // Show in a full-screen overlay inside the app (avoids popup blocker)
   const overlay = document.createElement('div');
@@ -6932,30 +6938,16 @@ function closePrintOverlay() {
 }
 
 function printFromOverlay() {
-  // Grab the rendered HTML content from the overlay content div
-  const contentDiv = document.querySelector('#print-overlay > div:last-child');
-  if (!contentDiv) { window.print(); return; }
+  // Use the stored full HTML (avoids DOM timing issues with blank popup)
+  if (!window._lastPrintHTML) { window.print(); return; }
 
-  // Get the styles too
-  const styleEl = document.querySelector('#print-overlay style');
-  const styles = styleEl ? styleEl.outerHTML : '';
-
-  // Open a blank popup window with just the purchase order HTML
-  const win = window.open('', '_blank', 'width=900,height=700');
+  const win = window.open('', '_blank', 'width=1000,height=800');
   if (!win) { window.print(); return; } // fallback if popup blocked
 
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>Purchase Order</title>
-    ${styles}
-    <style>
-      @page { margin: 12mm; }
-      body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #111; background: #fff; }
-      @media print { .no-print { display:none!important; } input, .print-edit-input { border:none!important; background:transparent!important; -webkit-appearance:none; box-shadow:none!important; } }
-    </style>
-  </head><body>${contentDiv.innerHTML}</body></html>`);
+  win.document.write(window._lastPrintHTML);
   win.document.close();
   win.focus();
-  setTimeout(() => win.print(), 400);
+  setTimeout(() => { win.print(); }, 600);
 }
 
 function editChecklistQty(el) {
