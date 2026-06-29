@@ -6028,7 +6028,7 @@ function renderChecklist() {
       html += '<div style="flex:1;min-width:0">'
         + '<div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + i.PartName + stockBadge + '</div>'
         + '<div style="font-size:11px;color:var(--text3);margin-top:2px">'
-        + '<span data-iid="' + i.ItemID + '" data-qty="' + i.TargetQty + '" onclick="editChecklistQty(this)" style="cursor:pointer;color:var(--accent);font-weight:800;border-bottom:1px dashed var(--accent)">Qty: ' + (i.TargetQty||1) + '</span> <span style="font-size:10px;color:var(--text3)">(tap to edit)</span>'
+        + '<span data-iid="' + i.ItemID + '" data-qty="' + i.TargetQty + '" onclick="editChecklistQty(this)" style="cursor:pointer;color:var(--accent);font-weight:800;border-bottom:1px dashed var(--accent)">Qty: ' + (parseFloat(i.TargetQty)===0.5?'½':(i.TargetQty||1)) + '</span> <span style="font-size:10px;color:var(--text3)">(tap to edit)</span>'
         + (supplier ? ' &nbsp;·&nbsp; ' + supplier : '')
         + '</div></div>';
 
@@ -6068,7 +6068,7 @@ function renderChecklist() {
 
     selectedItems.forEach(i => {
       const part = state.parts.find(p => p.PartID === i.PartID) || {};
-      const customQty = (window._clQtys && window._clQtys[i.ItemID]) ? window._clQtys[i.ItemID] : (parseInt(i.TargetQty)||1);
+      const customQty = (window._clQtys && window._clQtys[i.ItemID]) ? window._clQtys[i.ItemID] : (parseFloat(i.TargetQty)||1);
       const cost = parseFloat(part.CostPrice) || 0;
       const lineTotal = cost * customQty;
       grandTotal += lineTotal;
@@ -6535,7 +6535,7 @@ function printOrderedList() {
   // Always refresh qty from current TargetQty so checklist edits are reflected
   if (!window._clQtys) window._clQtys = {};
   orderedItems.forEach(i => {
-    window._clQtys[i.ItemID] = parseInt(i.TargetQty)||1;
+    window._clQtys[i.ItemID] = parseFloat(i.TargetQty)||1;
   });
   printChecklistOrder();
   window._clSelected = prev;
@@ -7114,7 +7114,7 @@ function editChecklistQty(el) {
     <div style="font-size:15px;font-weight:700;margin-bottom:4px">${item.PartName}</div>
     ${part.SupplierName ? '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">'+part.SupplierName+'</div>' : ''}
     <label>Quantity to Order</label>
-    <input id="cl-edit-qty" type="number" min="1" value="${currentQty}"
+    <input id="cl-edit-qty" type="number" min="0.5" step="0.5" value="${currentQty}"
       style="font-size:28px;font-weight:900;text-align:center;color:var(--accent)"
       oninput="document.getElementById('cl-qty-total').textContent='UGX '+((${costPrice}*(parseInt(this.value)||1)).toLocaleString())" />
     <div id="cl-qty-total" style="text-align:center;font-size:16px;font-weight:800;color:var(--accent);margin-top:6px">${costPrice > 0 ? 'UGX '+(costPrice*currentQty).toLocaleString() : ''}</div>
@@ -7146,7 +7146,7 @@ async function saveChecklistQty() {
 
 function updateChecklistQty(itemId, qty) {
   if (!window._clQtys) window._clQtys = {};
-  window._clQtys[itemId] = Math.max(1, qty);
+  window._clQtys[itemId] = Math.max(0.5, parseFloat(qty)||0.5);
   // Re-render just the summary bar without full re-render to avoid losing focus
   renderChecklist();
 }
