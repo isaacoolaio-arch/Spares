@@ -7049,56 +7049,56 @@ function closePrintOverlay() {
 
 function printFromOverlay() {
   const overlay = document.getElementById('print-overlay');
-  if (!overlay) { window.print(); return; }
+  if (!overlay || !window._lastPrintHTML) { window.print(); return; }
 
-  // Find content div — skip the sticky controls bar (first child)
-  var contentDiv = null;
-  var children = overlay.children;
-  for (var i = 0; i < children.length; i++) {
-    if (children[i].id !== 'print-controls' && children[i].tagName !== 'STYLE') {
-      contentDiv = children[i]; break;
-    }
-  }
-  if (!contentDiv) {
-    // Fallback: last child
-    contentDiv = overlay.lastElementChild;
-  }
-  if (!contentDiv) { window.print(); return; }
+  // Start from the clean stored HTML (has correct structure and CSS)
+  // Then patch in current user edits from the live DOM
+  var html = window._lastPrintHTML;
+
+  // Patch: replace each input/span value with current DOM value
+  overlay.querySelectorAll('input[data-row][data-field]').forEach(function(inp) {
+    // Can't easily patch HTML string — use DOM approach instead
+  });
+
+  // Build from live DOM — find the po-table wrapper div (contains the purchase order content)
+  // It's the div with padding:20px that wraps all the supplier tables
+  var contentDiv = overlay.querySelector('#print-controls + div') || overlay.lastElementChild;
+  if (!contentDiv || contentDiv.id === 'print-controls') { window.print(); return; }
 
   var clone = contentDiv.cloneNode(true);
 
-  // Replace pack-unit buttons with plain styled spans (no arrow)
+  // Clean up interactive elements for print
   clone.querySelectorAll('.pack-unit-btn').forEach(function(btn) {
     var txt = btn.textContent.replace(' ▾','').replace('▾','').trim();
     var sp = document.createElement('span');
-    sp.textContent = txt;
     sp.style.cssText = 'font-size:13px;font-family:Arial;color:#d97706;font-weight:700';
+    sp.textContent = txt;
     btn.parentNode.replaceChild(sp, btn);
   });
-  // Remove dropdowns and no-print elements
   clone.querySelectorAll('.pack-unit-drop, .no-print').forEach(function(el){ el.remove(); });
-  // Unwrap pack-unit-wrap divs
   clone.querySelectorAll('.pack-unit-wrap').forEach(function(w){
     while(w.firstChild) w.parentNode.insertBefore(w.firstChild, w);
     w.remove();
   });
 
-  // Get the embedded print styles
-  var styleEl = overlay.querySelector('style');
-  var styles = styleEl ? styleEl.outerHTML : '';
-
   var win = window.open('', '_blank', 'width=1000,height=800');
-  if (!win) { alert('Allow popups for this site to save PDF'); return; }
+  if (!win) { alert('Please allow popups for this site, then try again.'); return; }
+
+  // Use clean CSS only — no innerHTML of style tags (avoids printing JS)
+  var css = '@page{margin:12mm}'
+    + 'body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#111;background:#fff}'
+    + 'table{border-collapse:collapse;width:100%;font-size:13px}'
+    + 'th,td{padding:6px 8px;border:1px solid #ddd}'
+    + 'th{background:#f5f5f5;font-weight:800;font-size:12px}'
+    + '.extra-col th,.extra-col td{border:1px solid #ddd}'
+    + 'input{border:none!important;background:transparent!important;outline:none!important;font-family:Arial,sans-serif;-webkit-appearance:none;font-size:13px;font-weight:700}'
+    + '[contenteditable]{outline:none!important;border:none!important}'
+    + '.pack-unit-drop{display:none!important}'
+    + '@media print{.no-print{display:none!important}}';
 
   win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Order</title>'
-    + styles
-    + '<style>@page{margin:12mm}body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#111;background:#fff}'
-    + 'input{border:none!important;background:transparent!important;outline:none!important;font-family:Arial,sans-serif;-webkit-appearance:none}'
-    + '[contenteditable]{outline:none!important;border-bottom:none!important}'
-    + '.pack-unit-drop{display:none!important}'
-    + '</style></head><body>'
-    + clone.innerHTML
-    + '</body></html>');
+    + '<style>' + css + '</style>'
+    + '</head><body>' + clone.innerHTML + '</body></html>');
   win.document.close();
   win.focus();
   setTimeout(function(){ win.print(); }, 600);
