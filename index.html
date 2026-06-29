@@ -6604,10 +6604,16 @@ function printChecklistOrder() {
         +   '<input type="number" min="0" value="' + item.qty + '" data-row="' + safeRowId + '" data-field="qty"'
         +   ' onchange="recalcPrintRow(this)" class="print-edit-input"'
         +   ' style="width:50px;border:2px solid #d1d5db;border-radius:6px;padding:4px 4px;text-align:center;font-size:14px;font-weight:900;font-family:Arial;color:#111;background:#fff" /></td>'
-        // Extra column (description)
+        // Extra column — qty number + unit dropdown
         + '<td class="extra-col" style="padding:4px 6px;border:1px solid #ddd;text-align:center">'
-        +   '<input type="text" placeholder="e.g. 1 Jerry can" class="print-edit-input extra-col-input"'
-        +   ' style="width:90px;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;text-align:center;font-size:12px;font-family:Arial;color:#111;background:#fff" /></td>'
+        +   '<div style="display:flex;align-items:center;gap:3px;justify-content:center">'
+        +   '<input type="number" min="1" value="' + item.qty + '" data-row="' + safeRowId + '" data-field="packqty"'
+        +   ' onchange="updatePackLabel(this)" class="print-edit-input extra-col-input"'
+        +   ' style="width:38px;border:2px solid #d1d5db;border-radius:6px;padding:3px 4px;text-align:center;font-size:13px;font-weight:800;font-family:Arial;color:#111;background:#fff" />'
+        +   '<select data-row="' + safeRowId + '" data-field="packunit" onchange="updatePackLabel(this)" class="extra-col-input"'
+        +   ' style="border:2px solid #d1d5db;border-radius:6px;padding:3px 4px;font-size:12px;font-family:Arial;color:#111;background:#fff;cursor:pointer">'
+        +   '<option>Pieces</option><option>Jerry can</option><option>Pack</option><option>Box</option><option>Pair</option><option>Set</option><option>Litre</option><option>Kg</option><option>Roll</option>'
+        +   '</select></div></td>'
         // Amount
         + '<td id="' + safeRowId + '-amt" style="padding:6px 8px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">'
         +   (item.amount > 0 ? 'UGX ' + item.amount.toLocaleString() : '—') + '</td>'
@@ -6735,7 +6741,15 @@ function printChecklistOrder() {
       var amt = (parseFloat(costEl.value)||0) * (parseInt(qtyEl.value)||0);
       var cell = document.getElementById(row+'-amt');
       if (cell) cell.textContent = amt>0 ? 'UGX '+amt.toLocaleString() : '—';
+      // Sync pack qty to match order qty when qty changes
+      if (inp.dataset.field === 'qty') {
+        var packQtyEl = document.querySelector('[data-row="'+row+'"][data-field="packqty"]');
+        if (packQtyEl) packQtyEl.value = qtyEl.value;
+      }
       recalcPrintTotals();
+    }
+    function updatePackLabel(inp) {
+      // nothing to recalc — just a label change, no totals affected
     }
     function recalcPrintTotals() {
       var cs = document.querySelectorAll('[id$="-amt"]');
@@ -6760,7 +6774,7 @@ function printChecklistOrder() {
         +'<td style="padding:4px 8px;border:1px solid #ddd" colspan="3"><input type="text" placeholder="Part name..." style="width:100%;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;font-size:13px;font-weight:700;font-family:Arial;color:#111;box-sizing:border-box" /></td>'
         +'<td style="padding:4px 6px;border:1px solid #ddd"><input type="number" min="0" value="0" data-row="'+newId+'" data-field="cost" onchange="recalcPrintRow(this)" style="width:85px;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;text-align:right;font-size:13px;font-weight:700;font-family:Arial;color:#111" /></td>'
         +'<td style="padding:4px 6px;border:1px solid #ddd"><input type="number" min="0" value="1" data-row="'+newId+'" data-field="qty" onchange="recalcPrintRow(this)" style="width:50px;border:2px solid #d1d5db;border-radius:6px;padding:4px 4px;text-align:center;font-size:14px;font-weight:900;font-family:Arial;color:#111" /></td>'
-        +'<td class="extra-col" style="padding:4px 6px;border:1px solid #ddd;display:'+(extraVis?'':'none')+'"><input type="text" class="extra-col-input" placeholder="e.g. 1 Jerry can" style="width:90px;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;font-size:12px;font-family:Arial;color:#111" /></td>'
+        +'<td class="extra-col" style="padding:4px 6px;border:1px solid #ddd;text-align:center;display:'+(extraVis?'':'none')+'">'        +'<div style="display:flex;align-items:center;gap:3px;justify-content:center">'        +'<input type="number" min="1" value="1" data-row="'+newId+'" data-field="packqty" onchange="updatePackLabel(this)" class="extra-col-input" style="width:38px;border:2px solid #d1d5db;border-radius:6px;padding:3px 4px;text-align:center;font-size:13px;font-weight:800;font-family:Arial;color:#111;background:#fff" />'        +'<select data-row="'+newId+'" data-field="packunit" onchange="updatePackLabel(this)" class="extra-col-input" style="border:2px solid #d1d5db;border-radius:6px;padding:3px 4px;font-size:12px;font-family:Arial;color:#111;background:#fff">'        +'<option>Pieces</option><option>Jerry can</option><option>Pack</option><option>Box</option><option>Pair</option><option>Set</option><option>Litre</option><option>Kg</option><option>Roll</option>'        +'</select></div></td>'
         +'<td id="'+newId+'-amt" style="padding:6px 8px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">—</td>';
       tbody.appendChild(tr);
     }
