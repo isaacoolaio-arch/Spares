@@ -6604,16 +6604,17 @@ function printChecklistOrder() {
         +   '<input type="number" min="0" value="' + item.qty + '" data-row="' + safeRowId + '" data-field="qty"'
         +   ' onchange="recalcPrintRow(this)" class="print-edit-input"'
         +   ' style="width:50px;border:2px solid #d1d5db;border-radius:6px;padding:4px 4px;text-align:center;font-size:14px;font-weight:900;font-family:Arial;color:#111;background:#fff" /></td>'
-        // Extra column — qty number + unit dropdown
-        + '<td class="extra-col" style="padding:3px 4px;border:1px solid #ddd;text-align:center;white-space:nowrap">'
-        +   '<div style="display:flex;align-items:center;gap:2px;justify-content:center">'
+        // Extra column — Pack/Unit: always-visible styled select
+        + '<td class="extra-col" style="padding:3px 4px;border:1px solid #ddd;text-align:center">'
+        +   '<div style="display:flex;align-items:center;gap:2px;justify-content:center;flex-wrap:nowrap">'
         +   '<input type="number" min="1" value="' + item.qty + '" data-row="' + safeRowId + '" data-field="packqty"'
         +   ' onchange="updatePackLabel(this)" class="print-edit-input extra-col-input"'
-        +   ' style="width:34px;border:1.5px solid #d1d5db;border-radius:5px;padding:3px 2px;text-align:center;font-size:13px;font-weight:800;font-family:Arial;color:#111;background:#fff" />'
+        +   ' style="width:32px;border:1.5px solid #d1d5db;border-radius:5px;padding:2px 2px;text-align:center;font-size:12px;font-weight:800;font-family:Arial;color:#111;background:#fff;box-sizing:border-box" />'
         +   '<select data-row="' + safeRowId + '" data-field="packunit" onchange="updatePackLabel(this)" class="extra-col-input"'
-        +   ' style="min-width:72px;border:1.5px solid #d1d5db;border-radius:5px;padding:3px 2px;font-size:11px;font-family:Arial;color:#111;background:#fff;cursor:pointer">'
-        +   '<option value="Pcs">Pcs</option><option value="Jerry can">Jerry can</option><option value="Pack">Pack</option><option value="Box">Box</option><option value="Pair">Pair</option><option value="Set">Set</option><option value="Litre">Litre</option><option value="Kg">Kg</option><option value="Roll">Roll</option>'
-        +   '</select></div>'
+        +   ' style="width:68px;border:2px solid #f5a623;border-radius:5px;padding:2px 4px;font-size:12px;font-weight:700;font-family:Arial;color:#111;background:#fff8e6;cursor:pointer;appearance:auto;-webkit-appearance:auto">'
+        +   '<option>Pcs</option><option>Jerry can</option><option>Pack</option><option>Box</option><option>Pair</option><option>Set</option><option>Litre</option><option>Kg</option><option>Roll</option>'
+        +   '</select>'
+        +   '</div>'
         + '</td>'
         // Amount
         + '<td id="' + safeRowId + '-amt" style="padding:6px 8px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">'
@@ -6730,6 +6731,7 @@ function printChecklistOrder() {
     }
     .print-edit-input { background:#fff; }
     input[type=number], input[type=text] { border:1.5px solid #e5e7eb; border-radius:6px; background:#fff; color:#111; }
+    select.extra-col-input { background:#fff8e6!important; color:#111!important; border:2px solid #f5a623!important; font-weight:700!important; }
     input[type=number]:focus, input[type=text]:focus { outline:2px solid #f5a623; outline-offset:1px; border-color:#f5a623; }
     thead th { font-weight:800; font-size:12px; color:#111; letter-spacing:0.3px; }
   </style>
@@ -6775,7 +6777,7 @@ function printChecklistOrder() {
         +'<td style="padding:4px 8px;border:1px solid #ddd" colspan="3"><input type="text" placeholder="Part name..." style="width:100%;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;font-size:13px;font-weight:700;font-family:Arial;color:#111;box-sizing:border-box" /></td>'
         +'<td style="padding:4px 6px;border:1px solid #ddd"><input type="number" min="0" value="0" data-row="'+newId+'" data-field="cost" onchange="recalcPrintRow(this)" style="width:85px;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;text-align:right;font-size:13px;font-weight:700;font-family:Arial;color:#111" /></td>'
         +'<td style="padding:4px 6px;border:1px solid #ddd"><input type="number" min="0" value="1" data-row="'+newId+'" data-field="qty" onchange="recalcPrintRow(this)" style="width:50px;border:2px solid #d1d5db;border-radius:6px;padding:4px 4px;text-align:center;font-size:14px;font-weight:900;font-family:Arial;color:#111" /></td>'
-        +'<td class="extra-col" style="padding:3px 4px;border:1px solid #ddd;text-align:center;white-space:nowrap;display:'+(extraVis?'':'none')+'">'        +'<div style="display:flex;align-items:center;gap:2px;justify-content:center">'        +'<input type="number" min="1" value="1" data-row="'+newId+'" data-field="packqty" onchange="updatePackLabel(this)" class="extra-col-input" style="width:34px;border:1.5px solid #d1d5db;border-radius:5px;padding:3px 2px;text-align:center;font-size:13px;font-weight:800;font-family:Arial;color:#111;background:#fff" />'        +'<select data-row="'+newId+'" data-field="packunit" onchange="updatePackLabel(this)" class="extra-col-input" style="min-width:72px;border:1.5px solid #d1d5db;border-radius:5px;padding:3px 2px;font-size:11px;font-family:Arial;color:#111;background:#fff">'        +'<option value="Pcs">Pcs</option><option value="Jerry can">Jerry can</option><option value="Pack">Pack</option><option value="Box">Box</option><option value="Pair">Pair</option><option value="Set">Set</option><option value="Litre">Litre</option><option value="Kg">Kg</option><option value="Roll">Roll</option>'        +'</select></div></td>'
+        +'<td class="extra-col" style="padding:3px 4px;border:1px solid #ddd;text-align:center;display:'+(extraVis?'':'none')+'">'        +'<div style="display:flex;align-items:center;gap:2px;justify-content:center;flex-wrap:nowrap">'        +'<input type="number" min="1" value="1" data-row="'+newId+'" data-field="packqty" onchange="updatePackLabel(this)" class="extra-col-input" style="width:32px;border:1.5px solid #d1d5db;border-radius:5px;padding:2px 2px;text-align:center;font-size:12px;font-weight:800;font-family:Arial;color:#111;background:#fff;box-sizing:border-box" />'        +'<select data-row="'+newId+'" data-field="packunit" onchange="updatePackLabel(this)" class="extra-col-input" style="width:68px;border:2px solid #f5a623;border-radius:5px;padding:2px 4px;font-size:12px;font-weight:700;font-family:Arial;color:#111;background:#fff8e6;cursor:pointer;appearance:auto;-webkit-appearance:auto">'        +'<option>Pcs</option><option>Jerry can</option><option>Pack</option><option>Box</option><option>Pair</option><option>Set</option><option>Litre</option><option>Kg</option><option>Roll</option>'        +'</select></div></td>'
         +'<td id="'+newId+'-amt" style="padding:6px 8px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">—</td>';
       tbody.appendChild(tr);
     }
