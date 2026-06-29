@@ -6608,7 +6608,7 @@ function printChecklistOrder() {
         + '<td class="extra-col" style="padding:4px 6px;border:none;text-align:left;vertical-align:middle;white-space:nowrap">'
         +   '<span contenteditable="true" data-row="' + safeRowId + '" data-field="packqty"'
         +   ' oninput="updatePackLabel(this)"'
-        +   ' style="font-size:13px;font-family:Arial;color:#111;font-weight:700;margin-right:2px;min-width:16px;display:inline-block;text-align:center;outline:none;border-bottom:1.5px solid #d1d5db;cursor:text">' + (item.qty == 0.5 ? '½' : item.qty) + '</span>'
+        +   ' style="font-size:13px;font-family:Arial;color:#111;font-weight:700;margin-right:2px;min-width:16px;display:inline-block;text-align:center;outline:none;border-bottom:1.5px solid #d1d5db;cursor:text">' + (parseFloat(item.qty) === 0.5 ? '½' : item.qty) + '</span>'
         +   '<div class="pack-unit-wrap" style="position:relative;display:inline-block">'
         +   '<button type="button" onclick="toggleUnitDrop(this)" data-row="' + safeRowId + '" data-field="packunit" class="extra-col-input pack-unit-btn"'
         +   ' style="border:none;background:transparent;font-size:13px;font-family:Arial;color:#d97706;font-weight:700;cursor:pointer;padding:0;white-space:nowrap">Pieces ▾</button>'
@@ -6977,8 +6977,22 @@ function toggleUnitDrop(btn) {
   if(drop) drop.style.display = drop.style.display==='none' ? 'block' : 'none';
 }
 function pluralUnit(unit, qty) {
-  if (qty <= 1) return unit;
-  var map = {
+  qty = parseFloat(qty) || 1;
+  // singular forms
+  var singular = {
+    'Pieces':'Piece','Piece':'Piece',
+    'Boxes':'Box','Box':'Box',
+    'Jerry cans':'Jerry can','Jerry can':'Jerry can',
+    'Packs':'Pack','Pack':'Pack',
+    'Pairs':'Pair','Pair':'Pair',
+    'Sets':'Set','Set':'Set',
+    'Litres':'Litre','Litre':'Litre',
+    'Metres':'Metre','Metre':'Metre',
+    'Rolls':'Roll','Roll':'Roll',
+    'Kg':'Kg'
+  };
+  // plural forms
+  var plural = {
     'Piece':'Pieces','Pieces':'Pieces',
     'Box':'Boxes','Boxes':'Boxes',
     'Jerry can':'Jerry cans','Jerry cans':'Jerry cans',
@@ -6987,9 +7001,11 @@ function pluralUnit(unit, qty) {
     'Set':'Sets','Sets':'Sets',
     'Litre':'Litres','Litres':'Litres',
     'Metre':'Metres','Metres':'Metres',
-    'Kg':'Kg','Roll':'Rolls','Rolls':'Rolls'
+    'Roll':'Rolls','Rolls':'Rolls',
+    'Kg':'Kg'
   };
-  return map[unit] || unit;
+  if (qty === 1 || qty === 0.5) return singular[unit] || unit;
+  return plural[unit] || unit;
 }
 function fmtPackQty(qty) {
   if (qty === 0.5 || qty === '0.5') return '½'; // ½
@@ -7007,7 +7023,8 @@ function pickUnit(li, unit) {
 function updatePackBtn(btn) {
   var row = btn.dataset.row;
   var qtyEl = row ? document.querySelector('[data-row="'+row+'"][data-field="packqty"]') : null;
-  var qty = qtyEl ? (parseFloat(qtyEl.textContent)||parseFloat(qtyEl.value)||1) : 1;
+  var rawQty = qtyEl ? (qtyEl.textContent || qtyEl.value || '1').trim() : '1';
+  var qty = rawQty === '½' ? 0.5 : (parseFloat(rawQty) || 1);
   var unit = btn._unit || 'Pieces';
   btn.textContent = pluralUnit(unit, qty) + ' ▾';
 }
