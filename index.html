@@ -6625,6 +6625,9 @@ function printChecklistOrder() {
         +   '<li onclick="pickUnit(this,&apos;Roll&apos;)" style="padding:5px 12px;cursor:pointer;font-size:13px;font-family:Arial;color:#111">Roll</li>'
         +   '</ul></div>'
         + '</td>'
+        // Amount
+        + '<td id="' + safeRowId + '-amt" style="padding:6px 8px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">'
+        +   (item.amount > 0 ? 'UGX ' + item.amount.toLocaleString() : '—') + '</td>'
         + '</tr>';
     });
     supplierSections += '<div style="margin-bottom:24px">'
