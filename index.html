@@ -6557,7 +6557,7 @@ function printChecklistOrder() {
     const part = state.parts.find(p => p.PartID === i.PartID) || {};
     const sup  = part.SupplierName || 'Unknown Supplier';
     if (!bySupplier[sup]) bySupplier[sup] = [];
-    const qty    = (window._clQtys && window._clQtys[i.ItemID]) ? window._clQtys[i.ItemID] : (parseInt(i.TargetQty)||1);
+    const qty    = (window._clQtys && window._clQtys[i.ItemID]) ? parseFloat(window._clQtys[i.ItemID]) : (parseFloat(i.TargetQty)||1);
     const cost   = parseFloat(part.CostPrice) || 0;
     const amount = cost * qty;
     grandTotal  += amount;
@@ -6605,7 +6605,7 @@ function printChecklistOrder() {
         +   ' onchange="recalcPrintRow(this)" class="print-edit-input"'
         +   ' style="width:50px;border:2px solid #d1d5db;border-radius:6px;padding:4px 4px;text-align:center;font-size:14px;font-weight:900;font-family:Arial;color:#111;background:#fff" /></td>'
         // Extra column — Pack/Unit
-        + '<td class="extra-col" style="padding:4px 6px;border:none;text-align:left;vertical-align:middle;white-space:nowrap">'
+        + '<td class="extra-col" style="padding:4px 6px;border:1px solid #ddd;text-align:left;vertical-align:middle;white-space:nowrap">'
         +   '<span contenteditable="true" data-row="' + safeRowId + '" data-field="packqty"'
         +   ' oninput="updatePackLabel(this)"'
         +   ' style="font-size:13px;font-family:Arial;color:#111;font-weight:700;margin-right:4px;min-width:16px;display:inline-block;text-align:center;outline:none;border-bottom:1.5px solid #d1d5db;cursor:text">' + (parseFloat(item.qty) === 0.5 ? '½' : item.qty) + '</span>'
@@ -6646,7 +6646,8 @@ function printChecklistOrder() {
       + '<th style="padding:8px 10px;border:1px solid #ddd;text-align:right;font-weight:800;color:#111;font-size:12px">Amount</th>'
       + '</tr></thead><tbody id="tbody-' + sup.replace(/[^a-z0-9]/gi,'') + '">' + rows + '</tbody>'
       + '<tfoot><tr style="background:#fff8e6">'
-      + '<td colspan="5" style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-weight:800;font-size:13px">Subtotal (' + sup + ')</td>'
+      + '<td colspan="6" style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-weight:800;font-size:13px">Subtotal (' + sup + ')</td>'
+      + '<td class="extra-col" style="padding:8px 4px;border:1px solid #ddd"></td>'
       + '<td style="padding:8px 12px;border:1px solid #ddd;text-align:right;font-weight:900;color:#d97706;font-size:14px">' + (supTotal > 0 ? 'UGX ' + supTotal.toLocaleString() : '—') + '</td>'
       + '</tr></tfoot>'
       + '</table>'
