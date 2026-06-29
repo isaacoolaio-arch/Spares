@@ -6792,24 +6792,6 @@ function printChecklistOrder() {
         +'<td id="'+newId+'-amt" style="padding:6px 8px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">—</td>';
       tbody.appendChild(tr);
     }
-    function toggleUnitDrop(btn) {
-      // Close all other open dropdowns first
-      document.querySelectorAll('.pack-unit-drop').forEach(function(d){ if(d !== btn.nextElementSibling) d.style.display='none'; });
-      var drop = btn.nextElementSibling;
-      if(drop) drop.style.display = drop.style.display==='none' ? 'block' : 'none';
-    }
-    function pickUnit(li, unit) {
-      var drop = li.parentNode;
-      var btn = drop.previousElementSibling;
-      if(btn) btn.textContent = unit + ' ▾';
-      drop.style.display = 'none';
-    }
-    // Close dropdowns when clicking outside
-    document.addEventListener('click', function(e){
-      if(!e.target.classList.contains('pack-unit-btn') && !e.target.closest('.pack-unit-drop')){
-        document.querySelectorAll('.pack-unit-drop').forEach(function(d){ d.style.display='none'; });
-      }
-    });
     function toggleExtraCol(btn) {
       var show = btn.dataset.visible === '0';
       document.querySelectorAll('.extra-col').forEach(function(el){ el.style.display = show ? '' : 'none'; });
@@ -6978,6 +6960,23 @@ async function reopenPrintOrder(historyIndex) {
   document.body.appendChild(overlay);
 }
 
+// Global handlers for print preview Pack/Unit custom dropdown
+function toggleUnitDrop(btn) {
+  document.querySelectorAll('.pack-unit-drop').forEach(function(d){ if(d !== btn.nextElementSibling) d.style.display='none'; });
+  var drop = btn.nextElementSibling;
+  if(drop) drop.style.display = drop.style.display==='none' ? 'block' : 'none';
+}
+function pickUnit(li, unit) {
+  var drop = li.parentNode;
+  var btn = drop.previousElementSibling;
+  if(btn) btn.textContent = unit + ' ▾';
+  drop.style.display = 'none';
+}
+document.addEventListener('click', function(e){
+  if(e.target.classList && !e.target.classList.contains('pack-unit-btn') && !e.target.closest('.pack-unit-drop')){
+    document.querySelectorAll('.pack-unit-drop').forEach(function(d){ d.style.display='none'; });
+  }
+});
 function closePrintOverlay() {
   const el = document.getElementById('print-overlay');
   if (el) el.remove();
