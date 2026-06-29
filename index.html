@@ -6762,7 +6762,11 @@ function printChecklistOrder() {
       recalcPrintTotals();
     }
     function updatePackLabel(inp) {
-      // qty is now in a contenteditable span — nothing else to update
+      // Update plural on the unit button when qty changes
+      var row = inp.dataset ? inp.dataset.row : null;
+      if (!row) return;
+      var btn = document.querySelector('.pack-unit-btn[data-row="'+row+'"]');
+      if (btn) updatePackBtn(btn);
     }
     function recalcPrintTotals() {
       var cs = document.querySelectorAll('[id$="-amt"]');
@@ -6804,6 +6808,13 @@ function printChecklistOrder() {
 
   // Remove the buttons inside the embedded html since we have overlay controls
   document.body.appendChild(overlay);
+  // Init Pack/Unit button labels with correct plural
+  setTimeout(function(){
+    document.querySelectorAll('.pack-unit-btn').forEach(function(btn){
+      btn._unit = 'Pieces';
+      updatePackBtn(btn);
+    });
+  }, 50);
 }
 
 async function showPrintHistory() {
@@ -6965,6 +6976,27 @@ function toggleUnitDrop(btn) {
   var drop = btn.nextElementSibling;
   if(drop) drop.style.display = drop.style.display==='none' ? 'block' : 'none';
 }
+function pluralUnit(unit, qty) {
+  if (qty <= 1) return unit;
+  var map = {
+    'Piece':'Pieces','Pieces':'Pieces',
+    'Box':'Boxes','Boxes':'Boxes',
+    'Jerry can':'Jerry cans','Jerry cans':'Jerry cans',
+    'Pack':'Packs','Packs':'Packs',
+    'Pair':'Pairs','Pairs':'Pairs',
+    'Set':'Sets','Sets':'Sets',
+    'Litre':'Litres','Litres':'Litres',
+    'Metre':'Metres','Metres':'Metres',
+    'Kg':'Kg','Roll':'Rolls','Rolls':'Rolls'
+  };
+  return map[unit] || unit;
+}
+function fmtPackQty(qty) {
+  if (qty === 0.5 || qty === '0.5') return '½'; // ½
+  var n = parseFloat(qty);
+  if (isNaN(n)) return qty;
+  return n % 1 === 0 ? n.toString() : n.toString();
+}
 function pickUnit(li, unit) {
   var drop = li.parentNode;
   var btn = drop.previousElementSibling;
@@ -6973,8 +7005,11 @@ function pickUnit(li, unit) {
   drop.style.display = 'none';
 }
 function updatePackBtn(btn) {
+  var row = btn.dataset.row;
+  var qtyEl = row ? document.querySelector('[data-row="'+row+'"][data-field="packqty"]') : null;
+  var qty = qtyEl ? (parseFloat(qtyEl.textContent)||parseFloat(qtyEl.value)||1) : 1;
   var unit = btn._unit || 'Pieces';
-  btn.textContent = unit + ' ▾';
+  btn.textContent = pluralUnit(unit, qty) + ' ▾';
 }
 document.addEventListener('click', function(e){
   if(e.target.classList && !e.target.classList.contains('pack-unit-btn') && !e.target.closest('.pack-unit-drop')){
