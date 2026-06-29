@@ -6610,10 +6610,20 @@ function printChecklistOrder() {
         +   '<input type="number" min="1" value="' + item.qty + '" data-row="' + safeRowId + '" data-field="packqty"'
         +   ' onchange="updatePackLabel(this)" class="print-edit-input extra-col-input"'
         +   ' style="width:32px;border:1.5px solid #d1d5db;border-radius:5px;padding:2px 2px;text-align:center;font-size:12px;font-weight:800;font-family:Arial;color:#111;background:#fff;box-sizing:border-box" />'
-        +   '<select data-row="' + safeRowId + '" data-field="packunit" onchange="updatePackLabel(this)" class="extra-col-input"'
-        +   ' style="width:68px;border:2px solid #f5a623;border-radius:5px;padding:2px 4px;font-size:12px;font-weight:700;font-family:Arial;color:#111 !important;background:#fff8e6 !important;cursor:pointer">'
-        +   '<option>Pieces</option><option>Metre</option><option>Jerry can</option><option>Pack</option><option>Box</option><option>Pair</option><option>Set</option><option>Litre</option><option>Kg</option><option>Roll</option>'
-        +   '</select>'
+        +   '<div class="pack-unit-wrap" style="position:relative;display:inline-block">'
+        +   '<button type="button" onclick="toggleUnitDrop(this)" data-row="' + safeRowId + '" data-field="packunit" class="extra-col-input pack-unit-btn" style="min-width:72px;border:2px solid #f5a623;border-radius:5px;padding:3px 7px;font-size:12px;font-weight:700;font-family:Arial;color:#111;background:#fff8e6;cursor:pointer;text-align:left;white-space:nowrap">Pieces ▾</button>'
+        +   '<ul class="pack-unit-drop" style="display:none;position:absolute;top:100%;left:0;z-index:9999;background:#fff;border:2px solid #f5a623;border-radius:6px;padding:4px 0;margin:2px 0;list-style:none;box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:100px">'
+        +   '<li onclick="pickUnit(this,' + "'Pieces')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Pieces</li>'
+        +   '<li onclick="pickUnit(this,' + "'Metre')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Metre</li>'
+        +   '<li onclick="pickUnit(this,' + "'Jerry can')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Jerry can</li>'
+        +   '<li onclick="pickUnit(this,' + "'Pack')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Pack</li>'
+        +   '<li onclick="pickUnit(this,' + "'Box')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Box</li>'
+        +   '<li onclick="pickUnit(this,' + "'Pair')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Pair</li>'
+        +   '<li onclick="pickUnit(this,' + "'Set')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Set</li>'
+        +   '<li onclick="pickUnit(this,' + "'Litre')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Litre</li>'
+        +   '<li onclick="pickUnit(this,' + "'Kg')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Kg</li>'
+        +   '<li onclick="pickUnit(this,' + "'Roll')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Roll</li>'
+        +   '</ul></div>'
         +   '</div>'
         + '</td>'
         // Amount
@@ -6731,7 +6741,8 @@ function printChecklistOrder() {
     }
     .print-edit-input { background:#fff; }
     input[type=number], input[type=text] { border:1.5px solid #e5e7eb; border-radius:6px; background:#fff; color:#111; }
-    select.extra-col-input { background:#fff8e6!important; color:#111!important; border:2px solid #f5a623!important; font-weight:700!important; -webkit-appearance:menulist; appearance:menulist; color-scheme:light; }
+    .pack-unit-btn:hover { background:#fff0cc!important; }
+    .pack-unit-drop li:hover { background:#fff8e6; }
     input[type=number]:focus, input[type=text]:focus { outline:2px solid #f5a623; outline-offset:1px; border-color:#f5a623; }
     thead th { font-weight:800; font-size:12px; color:#111; letter-spacing:0.3px; }
   </style>
@@ -6777,10 +6788,28 @@ function printChecklistOrder() {
         +'<td style="padding:4px 8px;border:1px solid #ddd" colspan="3"><input type="text" placeholder="Part name..." style="width:100%;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;font-size:13px;font-weight:700;font-family:Arial;color:#111;box-sizing:border-box" /></td>'
         +'<td style="padding:4px 6px;border:1px solid #ddd"><input type="number" min="0" value="0" data-row="'+newId+'" data-field="cost" onchange="recalcPrintRow(this)" style="width:85px;border:2px solid #d1d5db;border-radius:6px;padding:4px 6px;text-align:right;font-size:13px;font-weight:700;font-family:Arial;color:#111" /></td>'
         +'<td style="padding:4px 6px;border:1px solid #ddd"><input type="number" min="0" value="1" data-row="'+newId+'" data-field="qty" onchange="recalcPrintRow(this)" style="width:50px;border:2px solid #d1d5db;border-radius:6px;padding:4px 4px;text-align:center;font-size:14px;font-weight:900;font-family:Arial;color:#111" /></td>'
-        +'<td class="extra-col" style="padding:3px 4px;border:1px solid #ddd;text-align:center;display:'+(extraVis?'':'none')+'">'        +'<div style="display:flex;align-items:center;gap:2px;justify-content:center;flex-wrap:nowrap">'        +'<input type="number" min="1" value="1" data-row="'+newId+'" data-field="packqty" onchange="updatePackLabel(this)" class="extra-col-input" style="width:32px;border:1.5px solid #d1d5db;border-radius:5px;padding:2px 2px;text-align:center;font-size:12px;font-weight:800;font-family:Arial;color:#111;background:#fff;box-sizing:border-box" />'        +'<select data-row="'+newId+'" data-field="packunit" onchange="updatePackLabel(this)" class="extra-col-input" style="width:68px;border:2px solid #f5a623;border-radius:5px;padding:2px 4px;font-size:12px;font-weight:700;font-family:Arial;color:#111 !important;background:#fff8e6 !important;cursor:pointer">'        +'<option>Pieces</option><option>Metre</option><option>Jerry can</option><option>Pack</option><option>Box</option><option>Pair</option><option>Set</option><option>Litre</option><option>Kg</option><option>Roll</option>'        +'</select></div></td>'
+        +'<td class="extra-col" style="padding:3px 4px;border:1px solid #ddd;text-align:center;display:'+(extraVis?'':'none')+'">'        +'<div style="display:flex;align-items:center;gap:2px;justify-content:center;flex-wrap:nowrap">'        +'<input type="number" min="1" value="1" data-row="'+newId+'" data-field="packqty" onchange="updatePackLabel(this)" class="extra-col-input" style="width:32px;border:1.5px solid #d1d5db;border-radius:5px;padding:2px 2px;text-align:center;font-size:12px;font-weight:800;font-family:Arial;color:#111;background:#fff;box-sizing:border-box" />'        +'<div class="pack-unit-wrap" style="position:relative;display:inline-block">'        +'<button type="button" onclick="toggleUnitDrop(this)" data-row="'+newId+'" data-field="packunit" class="extra-col-input pack-unit-btn" style="min-width:72px;border:2px solid #f5a623;border-radius:5px;padding:3px 7px;font-size:12px;font-weight:700;font-family:Arial;color:#111;background:#fff8e6;cursor:pointer;text-align:left;white-space:nowrap">Pieces ▾</button>'        +'<ul class="pack-unit-drop" style="display:none;position:absolute;top:100%;left:0;z-index:9999;background:#fff;border:2px solid #f5a623;border-radius:6px;padding:4px 0;margin:2px 0;list-style:none;box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:100px">'        +'<li onclick="pickUnit(this,' + "'Pieces')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Pieces</li>'        +'<li onclick="pickUnit(this,' + "'Metre')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Metre</li>'        +'<li onclick="pickUnit(this,' + "'Jerry can')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Jerry can</li>'        +'<li onclick="pickUnit(this,' + "'Pack')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Pack</li>'        +'<li onclick="pickUnit(this,' + "'Box')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Box</li>'        +'<li onclick="pickUnit(this,' + "'Pair')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Pair</li>'        +'<li onclick="pickUnit(this,' + "'Set')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Set</li>'        +'<li onclick="pickUnit(this,' + "'Litre')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Litre</li>'        +'<li onclick="pickUnit(this,' + "'Kg')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Kg</li>'        +'<li onclick="pickUnit(this,' + "'Roll')" + '" style="padding:6px 12px;cursor:pointer;font-size:12px;font-family:Arial;color:#111">Roll</li>'        +'</ul></div></div></td>'
         +'<td id="'+newId+'-amt" style="padding:6px 8px;border:1px solid #ddd;text-align:right;font-weight:800;color:#d97706;font-size:13px">—</td>';
       tbody.appendChild(tr);
     }
+    function toggleUnitDrop(btn) {
+      // Close all other open dropdowns first
+      document.querySelectorAll('.pack-unit-drop').forEach(function(d){ if(d !== btn.nextElementSibling) d.style.display='none'; });
+      var drop = btn.nextElementSibling;
+      if(drop) drop.style.display = drop.style.display==='none' ? 'block' : 'none';
+    }
+    function pickUnit(li, unit) {
+      var drop = li.parentNode;
+      var btn = drop.previousElementSibling;
+      if(btn) btn.textContent = unit + ' ▾';
+      drop.style.display = 'none';
+    }
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(e){
+      if(!e.target.classList.contains('pack-unit-btn') && !e.target.closest('.pack-unit-drop')){
+        document.querySelectorAll('.pack-unit-drop').forEach(function(d){ d.style.display='none'; });
+      }
+    });
     function toggleExtraCol(btn) {
       var show = btn.dataset.visible === '0';
       document.querySelectorAll('.extra-col').forEach(function(el){ el.style.display = show ? '' : 'none'; });
