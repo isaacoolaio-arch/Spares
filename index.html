@@ -6813,7 +6813,9 @@ function printChecklistOrder() {
     // Fix qty spans: replace 0.5 with ½
     document.querySelectorAll('[data-field="packqty"]').forEach(function(el){
       var raw = (el.textContent || el.value || '').trim();
-      if (raw === '0.5') { if (el.textContent !== undefined) el.textContent = '½'; else el.value = '½'; }
+      if (raw === '0.5' || raw === '.5') {
+        el.textContent = '½';
+      }
     });
     // Init button plural
     document.querySelectorAll('.pack-unit-btn').forEach(function(btn){
@@ -7045,23 +7047,54 @@ function closePrintOverlay() {
 }
 
 function printFromOverlay() {
-  // Use the stored full HTML (avoids DOM timing issues with blank popup)
-  if (!window._lastPrintHTML) { window.print(); return; }
+  // Capture current overlay DOM (reflects all user edits to qty, cost, Pack/Unit)
+  const overlay = document.getElementById('print-overlay');
+  if (!overlay) { window.print(); return; }
+
+  // Get the content area (skip the controls bar)
+  const contentDiv = overlay.querySelector('div[style*="max-width:900px"]');
+  if (!contentDiv) { window.print(); return; }
+
+  // Collect current state of all editable fields into the HTML
+  // Replace contenteditable spans and inputs with their current values
+  const clone = contentDiv.cloneNode(true);
+
+  // Fix pack-unit buttons: replace button text with plain text node (no arrow)
+  clone.querySelectorAll('.pack-unit-btn').forEach(function(btn) {
+    var txt = btn.textContent.replace(' ▾','').replace('▾','').trim();
+    var span = document.createElement('span');
+    span.textContent = txt;
+    span.style.cssText = 'font-size:13px;font-family:Arial;color:#d97706;font-weight:700';
+    btn.parentNode.replaceChild(span, btn);
+  });
+  // Remove dropdown lists
+  clone.querySelectorAll('.pack-unit-drop').forEach(function(d){ d.remove(); });
+  // Remove pack-unit-wrap divs (flatten)
+  clone.querySelectorAll('.pack-unit-wrap').forEach(function(w){
+    while(w.firstChild) w.parentNode.insertBefore(w.firstChild, w);
+    w.remove();
+  });
+  // Remove delete buttons (no-print)
+  clone.querySelectorAll('.no-print').forEach(function(el){ el.remove(); });
+
+  // Get embedded styles from overlay
+  const styleEl = overlay.querySelector('style');
+  const styles = styleEl ? styleEl.outerHTML : '';
 
   const win = window.open('', '_blank', 'width=1000,height=800');
-  if (!win) { window.print(); return; } // fallback if popup blocked
+  if (!win) { window.print(); return; }
 
-  win.document.write(window._lastPrintHTML);
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Order</title>'
+    + styles
+    + '<style>@page{margin:12mm}body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#111;background:#fff}'
+    + 'input,textarea{border:none!important;background:transparent!important;outline:none!important;font-family:Arial,sans-serif}'
+    + '[contenteditable]{outline:none!important;border:none!important}'
+    + '</style></head><body>'
+    + clone.innerHTML
+    + '</body></html>');
   win.document.close();
   win.focus();
-  // Strip ▾ arrows from Pack/Unit buttons before printing
-  setTimeout(() => {
-    win.document.querySelectorAll('.pack-unit-btn').forEach(function(b){
-      b.textContent = b.textContent.replace(' ▾','').replace('▾','');
-      b.style.cursor = 'default';
-    });
-    win.print();
-  }, 600);
+  setTimeout(() => { win.print(); }, 500);
 }
 
 function editChecklistQty(el) {
