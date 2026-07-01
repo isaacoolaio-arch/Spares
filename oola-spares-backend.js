@@ -2812,67 +2812,69 @@ function deleteExpense(data) {
 function searchPartImages(data) {
   try {
     const query = (data.query || '').trim();
-    const encoded = encodeURIComponent(query + ' motorcycle spare part');
     const urls = [];
 
-    // Source 1: Bing Image Search (more scraping-friendly than Google)
+    // Source 1: Wikimedia Commons API (open, no auth, reliable)
     try {
-      const bingUrl = 'https://www.bing.com/images/search?q=' + encoded + '&form=HDRSC2&first=1';
-      const resp = UrlFetchApp.fetch(bingUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-        muteHttpExceptions: true
+      const wikiSearch = 'https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch='
+        + encodeURIComponent(query) + '&srnamespace=6&format=json&srlimit=9';
+      const r1 = UrlFetchApp.fetch(wikiSearch, { muteHttpExceptions: true });
+      const j1 = JSON.parse(r1.getContentText());
+      ((j1.query || {}).search || []).forEach(function(item) {
+        const title = encodeURIComponent(item.title.replace('File:',''));
+        urls.push('https://commons.wikimedia.org/wiki/Special:FilePath/' + title + '?width=400');
       });
-      const html = resp.getContentText();
-      // Bing stores image URLs in murl parameter
-      const pat = /murl&quot;:&quot;(https?:\/\/[^&]+\.(?:jpg|jpeg|png|webp))/gi;
-      let m;
-      while ((m = pat.exec(html)) !== null && urls.length < 9) {
-        const u = m[1];
-        if (!urls.includes(u)) urls.push(u);
-      }
-      // Also try src= pattern
-      if (urls.length < 3) {
-        const pat2 = /"murl":"(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp))"/gi;
-        while ((m = pat2.exec(html)) !== null && urls.length < 9) {
-          const u = m[1];
-          if (!urls.includes(u)) urls.push(u);
-        }
-      }
-    } catch(e1) { Logger.log('Bing error: ' + e1); }
+    } catch(e1) { Logger.log('Wiki: ' + e1); }
 
-    // Source 2: DuckDuckGo image search as fallback
+    // Source 2: Wikimedia image info API for better thumbnails
     if (urls.length < 3) {
       try {
-        const ddgUrl = 'https://duckduckgo.com/?q=' + encoded + '&iax=images&ia=images';
-        const resp2 = UrlFetchApp.fetch(ddgUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-          muteHttpExceptions: true
+        const wikiImg = 'https://en.wikipedia.org/w/api.php?action=query&titles='
+          + encodeURIComponent(query.replace(/ /g,'_'))
+          + '&prop=pageimages&pithumbsize=400&format=json';
+        const r2 = UrlFetchApp.fetch(wikiImg, { muteHttpExceptions: true });
+        const j2 = JSON.parse(r2.getContentText());
+        const pages = (j2.query || {}).pages || {};
+        Object.values(pages).forEach(function(p) {
+          if (p.thumbnail && p.thumbnail.source) urls.push(p.thumbnail.source);
         });
-        const html2 = resp2.getContentText();
-        const vqd = (html2.match(/vqd=['"]([^'"]+)['"]/) || [])[1];
-        if (vqd) {
-          const imgUrl = 'https://duckduckgo.com/i.js?q=' + encoded + '&vqd=' + vqd + '&o=json';
-          const resp3 = UrlFetchApp.fetch(imgUrl, { muteHttpExceptions: true });
-          const json = JSON.parse(resp3.getContentText());
-          (json.results || []).slice(0, 9).forEach(function(r) {
-            if (r.image && !urls.includes(r.image)) urls.push(r.image);
-          });
-        }
-      } catch(e2) { Logger.log('DDG error: ' + e2); }
+      } catch(e2) { Logger.log('WikiImg: ' + e2); }
     }
 
-    // Source 3: Wikimedia Commons as last resort for generic parts
+    // Source 3: Open Images dataset via Wikimedia
     if (urls.length < 3) {
       try {
-        const wikiUrl = 'https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=' + encoded + '&srnamespace=6&format=json&srlimit=6';
-        const resp4 = UrlFetchApp.fetch(wikiUrl, { muteHttpExceptions: true });
-        const wjson = JSON.parse(resp4.getContentText());
-        ((wjson.query || {}).search || []).forEach(function(item) {
-          const title = item.title.replace('File:', '');
-          const thumb = 'https://commons.wikimedia.org/wiki/Special:FilePath/' + encodeURIComponent(title) + '?width=300';
-          if (!urls.includes(thumb)) urls.push(thumb);
+        const terms = query.toLowerCase().split(' ').slice(0,3);
+        const searchTerms = ['motorcycle+' + terms.join('+'), terms.join('+') + '+spare+part'];
+        searchTerms.forEach(function(term) {
+          if (urls.length >= 9) return;
+          const url = 'https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch='
+            + term + '+motorcycle&srnamespace=6&format=json&srlimit=6';
+          try {
+            const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+            const j = JSON.parse(r.getContentText());
+            ((j.query || {}).search || []).forEach(function(item) {
+              const t = encodeURIComponent(item.title.replace('File:',''));
+              const u = 'https://commons.wikimedia.org/wiki/Special:FilePath/' + t + '?width=400';
+              if (!urls.includes(u)) urls.push(u);
+            });
+          } catch(e) {}
         });
-      } catch(e3) { Logger.log('Wiki error: ' + e3); }
+      } catch(e3) { Logger.log('OpenImg: ' + e3); }
+    }
+
+    // Source 4: iNaturalist open API (good for real-world product photos)
+    if (urls.length < 3) {
+      try {
+        const inatUrl = 'https://api.inaturalist.org/v1/search?q='
+          + encodeURIComponent(query) + '&sources=taxa&per_page=6';
+        const r4 = UrlFetchApp.fetch(inatUrl, { muteHttpExceptions: true });
+        const j4 = JSON.parse(r4.getContentText());
+        ((j4.results || [])).forEach(function(item) {
+          const photo = ((item.record || {}).default_photo || {}).medium_url;
+          if (photo && !urls.includes(photo)) urls.push(photo);
+        });
+      } catch(e4) {}
     }
 
     return { success: true, urls: urls.slice(0, 9), count: urls.length };
