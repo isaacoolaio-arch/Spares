@@ -2813,71 +2813,88 @@ function searchPartImages(data) {
   try {
     const query = (data.query || '').trim();
     const urls = [];
+    const logs = [];
 
-    // Source 1: Wikimedia Commons API (open, no auth, reliable)
+    // Source 1: Google Custom Search API via free SerpAPI-compatible endpoint
+    // Use Open Search / scrape approach on sites known to have motorcycle parts
+    
+    // Direct image scrape from spare parts sites
+    const searchQueries = [
+      encodeURIComponent(query),
+      encodeURIComponent(query + ' spare part'),
+    ];
+
+    // Try Unsplash for generic product-style images  
     try {
-      const wikiSearch = 'https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch='
-        + encodeURIComponent(query) + '&srnamespace=6&format=json&srlimit=9';
-      const r1 = UrlFetchApp.fetch(wikiSearch, { muteHttpExceptions: true });
-      const j1 = JSON.parse(r1.getContentText());
-      ((j1.query || {}).search || []).forEach(function(item) {
-        const title = encodeURIComponent(item.title.replace('File:',''));
-        urls.push('https://commons.wikimedia.org/wiki/Special:FilePath/' + title + '?width=400');
+      const unsplashUrl = 'https://source.unsplash.com/featured/?'
+        + encodeURIComponent(query.split(' ').slice(0,3).join(','));
+      // Unsplash redirect gives us a real image
+      const r = UrlFetchApp.fetch(unsplashUrl, {
+        muteHttpExceptions: true,
+        followRedirects: true
       });
-    } catch(e1) { Logger.log('Wiki: ' + e1); }
+      if (r.getResponseCode() === 200) {
+        const blob = r.getBlob();
+        if (blob.getContentType().indexOf('image') >= 0) {
+          // Convert to base64 to send back
+          const b64 = Utilities.base64Encode(blob.getBytes());
+          const mime = blob.getContentType();
+          urls.push('data:' + mime + ';base64,' + b64);
+          logs.push('Unsplash OK');
+        }
+      }
+    } catch(e1) { logs.push('Unsplash err: ' + e1); }
 
-    // Source 2: Wikimedia image info API for better thumbnails
-    if (urls.length < 3) {
+    // Source 2: Wikimedia Commons - search for motorcycle parts
+    const wikiTerms = [
+      query,
+      query.split(' ')[0] + ' motorcycle',
+      'Bajaj motorcycle ' + query.split(' ')[0]
+    ];
+    
+    for (var t = 0; t < wikiTerms.length && urls.length < 8; t++) {
       try {
-        const wikiImg = 'https://en.wikipedia.org/w/api.php?action=query&titles='
-          + encodeURIComponent(query.replace(/ /g,'_'))
-          + '&prop=pageimages&pithumbsize=400&format=json';
-        const r2 = UrlFetchApp.fetch(wikiImg, { muteHttpExceptions: true });
-        const j2 = JSON.parse(r2.getContentText());
-        const pages = (j2.query || {}).pages || {};
-        Object.values(pages).forEach(function(p) {
-          if (p.thumbnail && p.thumbnail.source) urls.push(p.thumbnail.source);
+        const wikiUrl = 'https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch='
+          + encodeURIComponent(wikiTerms[t])
+          + '&srnamespace=6&format=json&srlimit=4';
+        const wr = UrlFetchApp.fetch(wikiUrl, { muteHttpExceptions: true });
+        const wj = JSON.parse(wr.getContentText());
+        ((wj.query || {}).search || []).forEach(function(item) {
+          const title = encodeURIComponent(item.title.replace('File:', ''));
+          const u = 'https://commons.wikimedia.org/wiki/Special:FilePath/' + title + '?width=400';
+          if (!urls.includes(u)) urls.push(u);
         });
-      } catch(e2) { Logger.log('WikiImg: ' + e2); }
+        logs.push('Wiki "' + wikiTerms[t] + '": ' + ((wj.query||{}).search||[]).length + ' results');
+      } catch(ew) { logs.push('Wiki err: ' + ew); }
     }
 
-    // Source 3: Open Images dataset via Wikimedia
-    if (urls.length < 3) {
+    // Source 3: Try fetching from spare parts sites directly
+    const partSites = [
+      'https://www.bajajparts.in/catalogsearch/result/?q=' + encodeURIComponent(query),
+      'https://www.bikesensors.com/search?q=' + encodeURIComponent(query)
+    ];
+
+    for (var s = 0; s < partSites.length && urls.length < 9; s++) {
       try {
-        const terms = query.toLowerCase().split(' ').slice(0,3);
-        const searchTerms = ['motorcycle+' + terms.join('+'), terms.join('+') + '+spare+part'];
-        searchTerms.forEach(function(term) {
-          if (urls.length >= 9) return;
-          const url = 'https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch='
-            + term + '+motorcycle&srnamespace=6&format=json&srlimit=6';
-          try {
-            const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-            const j = JSON.parse(r.getContentText());
-            ((j.query || {}).search || []).forEach(function(item) {
-              const t = encodeURIComponent(item.title.replace('File:',''));
-              const u = 'https://commons.wikimedia.org/wiki/Special:FilePath/' + t + '?width=400';
-              if (!urls.includes(u)) urls.push(u);
-            });
-          } catch(e) {}
+        const sr = UrlFetchApp.fetch(partSites[s], {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+          muteHttpExceptions: true,
+          followRedirects: true
         });
-      } catch(e3) { Logger.log('OpenImg: ' + e3); }
+        const html = sr.getContentText();
+        // Extract product image URLs
+        const imgPat = /"(https?:\/\/[^"]+\/(?:catalog|product|media|images)[^"]+\.(?:jpg|jpeg|png|webp))"/gi;
+        let m;
+        while ((m = imgPat.exec(html)) !== null && urls.length < 9) {
+          const u = m[1];
+          if (!urls.includes(u) && !u.includes('logo') && !u.includes('banner')) urls.push(u);
+        }
+        logs.push('Site ' + s + ': ' + urls.length + ' urls');
+      } catch(es) { logs.push('Site err: ' + es); }
     }
 
-    // Source 4: iNaturalist open API (good for real-world product photos)
-    if (urls.length < 3) {
-      try {
-        const inatUrl = 'https://api.inaturalist.org/v1/search?q='
-          + encodeURIComponent(query) + '&sources=taxa&per_page=6';
-        const r4 = UrlFetchApp.fetch(inatUrl, { muteHttpExceptions: true });
-        const j4 = JSON.parse(r4.getContentText());
-        ((j4.results || [])).forEach(function(item) {
-          const photo = ((item.record || {}).default_photo || {}).medium_url;
-          if (photo && !urls.includes(photo)) urls.push(photo);
-        });
-      } catch(e4) {}
-    }
-
-    return { success: true, urls: urls.slice(0, 9), count: urls.length };
+    Logger.log(logs.join(' | '));
+    return { success: true, urls: urls.slice(0, 9), count: urls.length, debug: logs.join(' | ') };
   } catch(e) {
     return { success: false, error: e.toString() };
   }

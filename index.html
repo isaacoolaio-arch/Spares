@@ -1064,7 +1064,9 @@ async function findPartImageOnline(partId) {
   if (!part) return;
   const partName = (part.ItemName || part.Name || '').trim();
   const brand = part.Brand || '';
-  const query = (brand ? brand + ' ' : '') + partName + ' motorcycle spare part';
+  // Build specific query — always include Bajaj since that's the shop focus
+  const brandStr = brand && brand.toLowerCase() !== 'bajaj' ? brand + ' Bajaj' : 'Bajaj';
+  const query = brandStr + ' ' + partName;
 
   // Show searching state
   showModal(`
@@ -1095,7 +1097,7 @@ async function findPartImageOnline(partId) {
     if (!statusEl) return;
 
     if (!urls.length) {
-      statusEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">😕 No images found.<br><small>Try searching manually or take a photo.</small></div>';
+      statusEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">😕 No images found for <strong>' + partName + '</strong>.<br><small style="display:block;margin-top:8px">Try: Take a photo or choose from Gallery.</small></div>';
       return;
     }
 
