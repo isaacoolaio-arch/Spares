@@ -6763,7 +6763,24 @@ function printChecklistOrder() {
       recalcPrintTotals();
     }
     function updatePackLabel(inp) {
-      // Update plural on the unit button when qty changes
+      // Convert 0.5 or 1/2 typed by user → ½ character
+      var raw = (inp.textContent || inp.value || '').trim();
+      if (raw === '0.5' || raw === '.5' || raw === '1/2') {
+        // Set to ½ and move cursor to end
+        if (inp.tagName === 'SPAN') {
+          inp.textContent = '½';
+          // Move cursor to end of contenteditable span
+          var range = document.createRange();
+          var sel = window.getSelection();
+          range.selectNodeContents(inp);
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        } else {
+          inp.value = '½';
+        }
+      }
+      // Update plural on the unit button
       var row = inp.dataset ? inp.dataset.row : null;
       if (!row) return;
       var btn = document.querySelector('.pack-unit-btn[data-row="'+row+'"]');
