@@ -1081,38 +1081,9 @@ async function findPartImageOnline(partId) {
   `);
 
   try {
-    // Use Anthropic API with web search to find image URLs
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-        messages: [{
-          role: 'user',
-          content: `Find 6 direct image URLs (ending in .jpg, .jpeg, .png, or .webp) for: "${query}". 
-Search Google Images or product sites. Return ONLY a JSON array of image URLs, no other text.
-Example: ["https://example.com/img1.jpg", "https://example.com/img2.png"]
-Only include direct image file URLs, not webpage URLs.`
-        }]
-      })
-    });
-
-    const data = await res.json();
-    const textBlocks = (data.content || []).filter(b => b.type === 'text');
-    const rawText = textBlocks.map(b => b.text).join('');
-
-    // Parse URLs from response
-    let urls = [];
-    try {
-      const match = rawText.match(/\[.*?\]/s);
-      if (match) urls = JSON.parse(match[0]);
-    } catch(e) {
-      // Fallback: extract URLs manually
-      const urlMatch = rawText.match(/https?:\/\/[^\s"']+\.(?:jpg|jpeg|png|webp)/gi);
-      if (urlMatch) urls = [...new Set(urlMatch)].slice(0, 6);
-    }
+    // Call GAS backend to search Google Images (avoids CORS + no API key needed)
+    const result = await api('searchPartImages', { query: query });
+    const urls = (result && result.urls) ? result.urls : [];
 
     const statusEl = document.getElementById('img-search-status');
     const resultsEl = document.getElementById('img-search-results');

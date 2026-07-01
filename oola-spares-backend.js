@@ -100,6 +100,7 @@ function handleRequest(e) {
       case 'clearAllChecklist':    result = clearAllChecklist(); break;
       case 'saveExpense':        result = saveExpense(data); break;
       case 'deleteExpense':      result = deleteExpense(data); break;
+      case 'searchPartImages':    result = searchPartImages(data); break;
       case 'getExpenses':        result = getExpenses(); break;
 
       // DASHBOARD
@@ -2806,4 +2807,35 @@ function deleteExpense(data) {
     }
   }
   return { success: false };
+}
+
+function searchPartImages(data) {
+  try {
+    const query = encodeURIComponent((data.query || '') + ' motorcycle spare part');
+    const url = 'https://www.google.com/search?q=' + query + '&tbm=isch&num=12';
+    const response = UrlFetchApp.fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      muteHttpExceptions: true
+    });
+    const html = response.getContentText();
+    // Extract image URLs from Google Images response
+    const urls = [];
+    // Match data-src or src in img tags, also match encoded URLs in script tags
+    const patterns = [
+      /\["(https:\/\/[^"]+\.(?:jpg|jpeg|png|webp))[^"]*",\d+,\d+\]/g,
+      /"(https:\/\/encrypted-tbn[^"]+)"/g
+    ];
+    for (const pat of patterns) {
+      let m;
+      while ((m = pat.exec(html)) !== null && urls.length < 9) {
+        const u = m[1];
+        if (!urls.includes(u)) urls.push(u);
+      }
+    }
+    return { success: true, urls: urls.slice(0, 9) };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
 }
