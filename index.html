@@ -6608,7 +6608,7 @@ function printChecklistOrder() {
         + '<td class="extra-col" style="padding:4px 6px;border:1px solid #ddd;text-align:left;vertical-align:middle;white-space:nowrap">'
         +   '<span contenteditable="true" data-row="' + safeRowId + '" data-field="packqty"'
         +   ' oninput="updatePackLabel(this)"'
-        +   ' style="font-size:13px;font-family:Arial;color:#111;font-weight:700;margin-right:4px;min-width:16px;display:inline-block;text-align:center;outline:none;border-bottom:1.5px solid #d1d5db;cursor:text">' + (parseFloat(item.qty) === 0.5 ? '½' : item.qty) + '</span>'
+        +   ' style="font-size:13px;font-family:Arial;color:#111;font-weight:700;margin-right:4px;min-width:16px;display:inline-block;text-align:center;outline:none;border-bottom:1.5px solid #d1d5db;cursor:text">' + (parseFloat(item.qty) === 0.5 ? '½' : parseFloat(item.qty)) + '</span>'
         +   '<div class="pack-unit-wrap" style="position:relative;display:inline-block">'
         +   '<button type="button" onclick="toggleUnitDrop(this)" data-row="' + safeRowId + '" data-field="packunit" class="extra-col-input pack-unit-btn"'
         +   ' style="border:none;background:transparent;font-size:13px;font-family:Arial;color:#d97706;font-weight:700;cursor:pointer;padding:0;white-space:nowrap">Pieces ▾</button>'
@@ -6828,12 +6828,11 @@ function printChecklistOrder() {
   document.body.appendChild(overlay);
   // Init Pack/Unit: fix ½ display in spans, then set plural on buttons
   setTimeout(function(){
-    // Fix qty spans: replace 0.5 with ½
+    // Fix qty spans: replace decimal fractions with nice display
     document.querySelectorAll('[data-field="packqty"]').forEach(function(el){
       var raw = (el.textContent || el.value || '').trim();
-      if (raw === '0.5' || raw === '.5') {
-        el.textContent = '½';
-      }
+      var n = parseFloat(raw);
+      if (n === 0.5) el.textContent = '½';
     });
     // Init button plural
     document.querySelectorAll('.pack-unit-btn').forEach(function(btn){
@@ -7152,7 +7151,7 @@ function editChecklistQty(el) {
 
 async function saveChecklistQty() {
   const itemId = document.getElementById('cl-edit-iid').value;
-  const qty    = parseInt(document.getElementById('cl-edit-qty').value) || 1;
+  const qty    = parseFloat(document.getElementById('cl-edit-qty').value) || 1;
   const item   = state.checklist.find(i => i.ItemID === itemId);
   if (!item) { closeModal(); return; }
   item.TargetQty = qty;
