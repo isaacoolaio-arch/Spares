@@ -2811,30 +2811,71 @@ function deleteExpense(data) {
 
 function searchPartImages(data) {
   try {
-    const query = encodeURIComponent((data.query || '') + ' motorcycle spare part');
-    const url = 'https://www.google.com/search?q=' + query + '&tbm=isch&num=12';
-    const response = UrlFetchApp.fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      muteHttpExceptions: true
-    });
-    const html = response.getContentText();
-    // Extract image URLs from Google Images response
+    const query = (data.query || '').trim();
+    const encoded = encodeURIComponent(query + ' motorcycle spare part');
     const urls = [];
-    // Match data-src or src in img tags, also match encoded URLs in script tags
-    const patterns = [
-      /\["(https:\/\/[^"]+\.(?:jpg|jpeg|png|webp))[^"]*",\d+,\d+\]/g,
-      /"(https:\/\/encrypted-tbn[^"]+)"/g
-    ];
-    for (const pat of patterns) {
+
+    // Source 1: Bing Image Search (more scraping-friendly than Google)
+    try {
+      const bingUrl = 'https://www.bing.com/images/search?q=' + encoded + '&form=HDRSC2&first=1';
+      const resp = UrlFetchApp.fetch(bingUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        muteHttpExceptions: true
+      });
+      const html = resp.getContentText();
+      // Bing stores image URLs in murl parameter
+      const pat = /murl&quot;:&quot;(https?:\/\/[^&]+\.(?:jpg|jpeg|png|webp))/gi;
       let m;
       while ((m = pat.exec(html)) !== null && urls.length < 9) {
         const u = m[1];
         if (!urls.includes(u)) urls.push(u);
       }
+      // Also try src= pattern
+      if (urls.length < 3) {
+        const pat2 = /"murl":"(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp))"/gi;
+        while ((m = pat2.exec(html)) !== null && urls.length < 9) {
+          const u = m[1];
+          if (!urls.includes(u)) urls.push(u);
+        }
+      }
+    } catch(e1) { Logger.log('Bing error: ' + e1); }
+
+    // Source 2: DuckDuckGo image search as fallback
+    if (urls.length < 3) {
+      try {
+        const ddgUrl = 'https://duckduckgo.com/?q=' + encoded + '&iax=images&ia=images';
+        const resp2 = UrlFetchApp.fetch(ddgUrl, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          muteHttpExceptions: true
+        });
+        const html2 = resp2.getContentText();
+        const vqd = (html2.match(/vqd=['"]([^'"]+)['"]/) || [])[1];
+        if (vqd) {
+          const imgUrl = 'https://duckduckgo.com/i.js?q=' + encoded + '&vqd=' + vqd + '&o=json';
+          const resp3 = UrlFetchApp.fetch(imgUrl, { muteHttpExceptions: true });
+          const json = JSON.parse(resp3.getContentText());
+          (json.results || []).slice(0, 9).forEach(function(r) {
+            if (r.image && !urls.includes(r.image)) urls.push(r.image);
+          });
+        }
+      } catch(e2) { Logger.log('DDG error: ' + e2); }
     }
-    return { success: true, urls: urls.slice(0, 9) };
+
+    // Source 3: Wikimedia Commons as last resort for generic parts
+    if (urls.length < 3) {
+      try {
+        const wikiUrl = 'https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=' + encoded + '&srnamespace=6&format=json&srlimit=6';
+        const resp4 = UrlFetchApp.fetch(wikiUrl, { muteHttpExceptions: true });
+        const wjson = JSON.parse(resp4.getContentText());
+        ((wjson.query || {}).search || []).forEach(function(item) {
+          const title = item.title.replace('File:', '');
+          const thumb = 'https://commons.wikimedia.org/wiki/Special:FilePath/' + encodeURIComponent(title) + '?width=300';
+          if (!urls.includes(thumb)) urls.push(thumb);
+        });
+      } catch(e3) { Logger.log('Wiki error: ' + e3); }
+    }
+
+    return { success: true, urls: urls.slice(0, 9), count: urls.length };
   } catch(e) {
     return { success: false, error: e.toString() };
   }
