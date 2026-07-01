@@ -1084,7 +1084,13 @@ async function findPartImageOnline(partId) {
 
   try {
     // Call GAS backend to search Google Images (avoids CORS + no API key needed)
-    const result = await api('searchPartImages', { query: query });
+    // Pass Google API key from settings if available (optional — improves results)
+    const s = state.settings || {};
+    const result = await api('searchPartImages', {
+      query: query,
+      googleApiKey: s.googleApiKey || '',
+      cseId: s.googleCseId || ''
+    });
     if (!result || !result.success) {
       const statusEl = document.getElementById('img-search-status');
       if (statusEl) statusEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">😕 No images found for this part.<br><small>Try taking a photo or choosing from gallery.</small></div>';

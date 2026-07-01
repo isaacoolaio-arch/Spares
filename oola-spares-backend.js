@@ -2813,88 +2813,83 @@ function searchPartImages(data) {
   try {
     const query = (data.query || '').trim();
     const urls = [];
-    const logs = [];
 
-    // Source 1: Google Custom Search API via free SerpAPI-compatible endpoint
-    // Use Open Search / scrape approach on sites known to have motorcycle parts
-    
-    // Direct image scrape from spare parts sites
-    const searchQueries = [
-      encodeURIComponent(query),
-      encodeURIComponent(query + ' spare part'),
-    ];
+    // Use Google Custom Search API — free 100/day, returns real image results
+    // CSE ID: searches the whole web for images
+    const apiKey = data.googleApiKey || '';
+    const cseId  = data.cseId || '';
 
-    // Try Unsplash for generic product-style images  
-    try {
-      const unsplashUrl = 'https://source.unsplash.com/featured/?'
-        + encodeURIComponent(query.split(' ').slice(0,3).join(','));
-      // Unsplash redirect gives us a real image
-      const r = UrlFetchApp.fetch(unsplashUrl, {
-        muteHttpExceptions: true,
-        followRedirects: true
+    if (apiKey && cseId) {
+      // Proper Google Custom Search
+      const gUrl = 'https://www.googleapis.com/customsearch/v1?key=' + apiKey
+        + '&cx=' + cseId
+        + '&q=' + encodeURIComponent(query)
+        + '&searchType=image&num=9&imgSize=medium&safe=active';
+      const gr = UrlFetchApp.fetch(gUrl, { muteHttpExceptions: true });
+      const gj = JSON.parse(gr.getContentText());
+      ((gj.items || [])).forEach(function(item) {
+        if (item.link) urls.push(item.link);
       });
-      if (r.getResponseCode() === 200) {
-        const blob = r.getBlob();
-        if (blob.getContentType().indexOf('image') >= 0) {
-          // Convert to base64 to send back
-          const b64 = Utilities.base64Encode(blob.getBytes());
-          const mime = blob.getContentType();
-          urls.push('data:' + mime + ';base64,' + b64);
-          logs.push('Unsplash OK');
-        }
-      }
-    } catch(e1) { logs.push('Unsplash err: ' + e1); }
+      Logger.log('Google CSE: ' + urls.length + ' results');
+    }
 
-    // Source 2: Wikimedia Commons - search for motorcycle parts
-    const wikiTerms = [
-      query,
-      query.split(' ')[0] + ' motorcycle',
-      'Bajaj motorcycle ' + query.split(' ')[0]
-    ];
-    
-    for (var t = 0; t < wikiTerms.length && urls.length < 8; t++) {
+    // Fallback: use Google Images via GAS UrlFetchApp with proper headers
+    if (urls.length < 3) {
+      const encoded = encodeURIComponent(query);
+      const gImgUrl = 'https://www.google.com/search?q=' + encoded
+        + '&tbm=isch&hl=en&gl=ug&num=20';
+      const resp = UrlFetchApp.fetch(gImgUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.210 Mobile Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://www.google.com/'
+        },
+        muteHttpExceptions: true
+      });
+      const html = resp.getContentText();
+      Logger.log('Google HTML length: ' + html.length);
+
+      // Pattern 1: JSON encoded image data in script tags
+      const p1 = /\["(https?:\/\/[^"\\]+\.(?:jpg|jpeg|png|webp))","https?:\/\//g;
+      let m;
+      while ((m = p1.exec(html)) !== null && urls.length < 9) {
+        if (!urls.includes(m[1])) urls.push(m[1]);
+      }
+
+      // Pattern 2: ou": "URL" pattern from Google
+      const p2 = /"ou":"(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp))"/g;
+      while ((m = p2.exec(html)) !== null && urls.length < 9) {
+        if (!urls.includes(m[1])) urls.push(m[1]);
+      }
+
+      // Pattern 3: imgurl= parameter
+      const p3 = /imgurl=(https?[^&"]+\.(?:jpg|jpeg|png|webp))/g;
+      while ((m = p3.exec(html)) !== null && urls.length < 9) {
+        try {
+          const u = decodeURIComponent(m[1]);
+          if (!urls.includes(u)) urls.push(u);
+        } catch(e) {}
+      }
+
+      Logger.log('After Google scrape: ' + urls.length + ' urls');
+    }
+
+    // Last resort: Wikimedia
+    if (urls.length < 3) {
       try {
-        const wikiUrl = 'https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch='
-          + encodeURIComponent(wikiTerms[t])
-          + '&srnamespace=6&format=json&srlimit=4';
-        const wr = UrlFetchApp.fetch(wikiUrl, { muteHttpExceptions: true });
+        const wUrl = 'https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch='
+          + encodeURIComponent(query) + '&srnamespace=6&format=json&srlimit=6';
+        const wr = UrlFetchApp.fetch(wUrl, { muteHttpExceptions: true });
         const wj = JSON.parse(wr.getContentText());
         ((wj.query || {}).search || []).forEach(function(item) {
-          const title = encodeURIComponent(item.title.replace('File:', ''));
-          const u = 'https://commons.wikimedia.org/wiki/Special:FilePath/' + title + '?width=400';
-          if (!urls.includes(u)) urls.push(u);
+          const t = encodeURIComponent(item.title.replace('File:', ''));
+          urls.push('https://commons.wikimedia.org/wiki/Special:FilePath/' + t + '?width=400');
         });
-        logs.push('Wiki "' + wikiTerms[t] + '": ' + ((wj.query||{}).search||[]).length + ' results');
-      } catch(ew) { logs.push('Wiki err: ' + ew); }
+      } catch(ew) {}
     }
 
-    // Source 3: Try fetching from spare parts sites directly
-    const partSites = [
-      'https://www.bajajparts.in/catalogsearch/result/?q=' + encodeURIComponent(query),
-      'https://www.bikesensors.com/search?q=' + encodeURIComponent(query)
-    ];
-
-    for (var s = 0; s < partSites.length && urls.length < 9; s++) {
-      try {
-        const sr = UrlFetchApp.fetch(partSites[s], {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
-          muteHttpExceptions: true,
-          followRedirects: true
-        });
-        const html = sr.getContentText();
-        // Extract product image URLs
-        const imgPat = /"(https?:\/\/[^"]+\/(?:catalog|product|media|images)[^"]+\.(?:jpg|jpeg|png|webp))"/gi;
-        let m;
-        while ((m = imgPat.exec(html)) !== null && urls.length < 9) {
-          const u = m[1];
-          if (!urls.includes(u) && !u.includes('logo') && !u.includes('banner')) urls.push(u);
-        }
-        logs.push('Site ' + s + ': ' + urls.length + ' urls');
-      } catch(es) { logs.push('Site err: ' + es); }
-    }
-
-    Logger.log(logs.join(' | '));
-    return { success: true, urls: urls.slice(0, 9), count: urls.length, debug: logs.join(' | ') };
+    return { success: true, urls: urls.slice(0, 9), count: urls.length };
   } catch(e) {
     return { success: false, error: e.toString() };
   }
