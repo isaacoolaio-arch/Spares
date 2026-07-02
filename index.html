@@ -757,7 +757,7 @@
       <span class="nav-icon">📊</span><span>Home</span>
     </div>
     <div id="nav-parts" class="nav-item" onclick="showView('parts', this)">
-      <span class="nav-icon">🔩</span><span>Parts</span>
+      <span class="nav-icon">🔩</span><span>Spare Parts</span>
     </div>
     <div id="nav-suppliers" class="nav-item" onclick="showView('suppliers', this)">
       <span class="nav-icon">🏪</span><span>Suppliers</span>
@@ -2813,7 +2813,7 @@ function showView(view, navEl) {
   document.getElementById('view-' + view).classList.add('active');
   if (navEl) navEl.classList.add('active');
   state.currentView = view;
-  const titles = { dashboard: 'Dashboard', parts: 'Parts Catalogue', suppliers: 'Suppliers', transactions: 'Records', reports: 'Reports', stocklist: 'Stock List', customers: 'Customers' };
+  const titles = { dashboard: 'Dashboard', parts: 'Spare Parts', suppliers: 'Suppliers', transactions: 'Records', reports: 'Reports', stocklist: 'Stock List', customers: 'Customers' };
   document.getElementById('topbar-title').textContent = titles[view] || view;
   const _ib = document.getElementById('import-btn'); if(_ib) _ib.style.display = view==='parts'?'flex':'none';
 
@@ -3009,7 +3009,7 @@ function renderDashboard() {
 function showImportModal() {
   showModal(`
     <div class="modal-header">
-      <div class="modal-title">Import Parts</div>
+      <div class="modal-title">Import Spare Parts</div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
 
@@ -4380,7 +4380,7 @@ async function savePartWizard() {
 function showImportModal() {
   showModal(`
     <div class="modal-header">
-      <div class="modal-title">Import Parts</div>
+      <div class="modal-title">Import Spare Parts</div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
 
@@ -9925,7 +9925,7 @@ function exportStockWord() {
     </style>
     </head><body>
     <h1>🔧 Oola Spares</h1>
-    <h2>Motorcycle Parts — Stock List</h2>
+    <h2>Spare Parts — Stock List</h2>
     <div class="meta">
       <span><strong>Date:</strong> ${today}</span>
       <span><strong>Category:</strong> ${stockFilter}</span>
@@ -9983,7 +9983,7 @@ function exportStockWord() {
 function showImportModal() {
   showModal(`
     <div class="modal-header">
-      <div class="modal-title">Import Parts</div>
+      <div class="modal-title">Import Spare Parts</div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
 
@@ -10199,7 +10199,7 @@ function parseCSV(text) {
 function showImportModal() {
   showModal(`
     <div class="modal-header">
-      <div class="modal-title">Import Parts</div>
+      <div class="modal-title">Import Spare Parts</div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
 
