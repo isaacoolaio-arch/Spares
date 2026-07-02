@@ -4838,13 +4838,19 @@ function filterParts() {
 
   // Group parts by ItemName — merge same-name parts into one card with brand tabs
   const groups = {};
+  const groupOrder = []; // preserve sort order
   parts.forEach(p => {
     const name = (p.ItemName || p.Name || '').trim();
-    if (!groups[name]) groups[name] = [];
-    groups[name].push(p);
+    const size = String(p.Size || '').trim();
+    // Group key: same name + same size = same group (different brands = tabs)
+    const key = name + (size ? ' | ' + size : '');
+    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(p);
   });
 
-  document.getElementById('parts-list').innerHTML = Object.entries(groups).map(([name, variants]) => {
+  document.getElementById('parts-list').innerHTML = groupOrder.map(key => {
+    const variants = groups[key];
+    const name = (variants[0].ItemName || variants[0].Name || '').trim();
     const groupId = 'grp-' + variants[0].PartID;
     // Active variant: stored in window state or first
     const activeIdx = window._partGroupActive && window._partGroupActive[groupId] !== undefined
