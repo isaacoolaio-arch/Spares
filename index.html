@@ -4879,7 +4879,8 @@ function filterParts() {
     const safeName   = name.replace(/'/g,"&#39;");
     const multi      = variants.length > 1;
 
-    // Brand tabs for multi-variant groups (always show tabs + add button)
+    // Brand tabs — edit mode hidden by default, revealed via pencil toggle
+    const editMode = window._brandEditMode && window._brandEditMode[groupId];
     const brandTabs = `
       <div style="display:flex;gap:5px;flex-wrap:wrap;padding:0 14px 10px;align-items:center">
         ${variants.map((v, i) => {
@@ -4892,7 +4893,7 @@ function filterParts() {
           const vSafeName = (v.ItemName||v.Name||'').replace(/'/g,"&#39;");
           return `<div style="display:flex;align-items:center;gap:0">
             <button onclick="event.stopPropagation();switchPartVariant('${groupId}',${i})"
-              style="padding:4px 8px;border-radius:20px 0 0 20px;border:1.5px solid ${isActive ? 'var(--accent)' : 'var(--border)'};border-right:none;
+              style="padding:4px 10px;border-radius:20px;border:1.5px solid ${isActive ? 'var(--accent)' : 'var(--border)'};
                 background:${isActive ? 'var(--accent-dim)' : 'var(--surface2)'};
                 color:${isActive ? 'var(--accent)' : 'var(--text3)'};
                 font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);
@@ -4900,17 +4901,26 @@ function filterParts() {
               <span style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
               ${label}
             </button>
-            <button onclick="event.stopPropagation();confirmDeletePart('${v.PartID}','${vSafeName} (${label})')"
-              title="Delete ${label}"
-              style="padding:4px 6px;border-radius:0 20px 20px 0;border:1.5px solid ${isActive ? 'var(--accent)' : 'var(--border)'};
-                background:${isActive ? 'rgba(240,93,93,.15)' : 'var(--surface2)'};
-                color:var(--red);font-size:10px;cursor:pointer;line-height:1">✕</button>
+            ${editMode ? `<button onclick="event.stopPropagation();confirmDeletePart('${v.PartID}','${vSafeName} (${label})')"
+              style="margin-left:-8px;padding:3px 6px;border-radius:0 20px 20px 0;
+                border:1.5px solid var(--red);border-left:none;
+                background:rgba(240,93,93,.12);color:var(--red);
+                font-size:10px;cursor:pointer;line-height:1">✕</button>` : ''}
           </div>`;
         }).join('')}
-        <button onclick="event.stopPropagation();addBrandVariant('${groupId}')"
-          style="padding:4px 10px;border-radius:20px;border:1.5px dashed var(--border);
-            background:transparent;color:var(--text3);font-size:11px;font-weight:700;
-            cursor:pointer;font-family:var(--font)">+ Brand</button>
+        ${editMode ? `<button onclick="event.stopPropagation();addBrandVariant('${groupId}')"
+          style="padding:4px 10px;border-radius:20px;border:1.5px dashed var(--accent);
+            background:var(--accent-dim);color:var(--accent);font-size:11px;font-weight:700;
+            cursor:pointer;font-family:var(--font)">+ Brand</button>` : ''}
+        <button onclick="event.stopPropagation();toggleBrandEditMode('${groupId}')"
+          title="${editMode ? 'Done' : 'Edit brands'}"
+          style="margin-left:auto;padding:3px 8px;border-radius:20px;
+            border:1px solid ${editMode ? 'var(--accent)' : 'var(--border)'};
+            background:${editMode ? 'var(--accent-dim)' : 'transparent'};
+            color:${editMode ? 'var(--accent)' : 'var(--text3)'};
+            font-size:11px;cursor:pointer;font-family:var(--font)">
+          ${editMode ? '✓ Done' : '✏️'}
+        </button>
       </div>`;
 
     return `
@@ -5007,6 +5017,12 @@ function filterParts() {
         </div>
       </div>`;
   }).join('');
+}
+
+function toggleBrandEditMode(groupId) {
+  if (!window._brandEditMode) window._brandEditMode = {};
+  window._brandEditMode[groupId] = !window._brandEditMode[groupId];
+  filterParts();
 }
 
 function switchPartVariant(groupId, idx) {
