@@ -1493,13 +1493,24 @@ const IDB = {
   async open() {
     if (this.db) return this.db;
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open('OolaSpares', 4);
+      const req = indexedDB.open('OolaSpares', 5);
       req.onupgradeneeded = e => {
         const db = e.target.result;
         // Main data stores
-        ['parts','suppliers','supplierRates','sales','purchases','checklist','settings','customers','expenses'].forEach(store => {
+        const storeConfigs = [
+          ['parts',         { keyPath: 'PartID' }],
+          ['suppliers',     { keyPath: 'SupplierID' }],
+          ['supplierRates', { autoIncrement: true }],
+          ['sales',         { keyPath: 'SaleID' }],
+          ['purchases',     { keyPath: 'PurchaseID' }],
+          ['checklist',     { keyPath: 'ItemID' }],
+          ['customers',     { keyPath: 'CustomerID' }],
+          ['expenses',      { keyPath: 'ExpenseID' }],
+          ['settings',      { keyPath: 'key' }]
+        ];
+        storeConfigs.forEach(([store, opts]) => {
           if (!db.objectStoreNames.contains(store)) {
-            db.createObjectStore(store, { keyPath: store === 'settings' ? 'key' : null, autoIncrement: store === 'settings' ? false : true });
+            db.createObjectStore(store, opts);
           }
         });
         // Sync queue for pending offline changes
@@ -2692,7 +2703,7 @@ async function loadAll() {
   const [p, s, r, sa, pu, ch, se, cu] = await Promise.all([
     fromCache('getParts'), fromCache('getSuppliers'), fromCache('getSupplierRates'),
     fromCache('getSales'), fromCache('getPurchases'), fromCache('getChecklist'),
-    fromCache('getSettings'), fromCache('customers')
+    fromCache('getSettings'), fromCache('getCustomers')
   ]);
 
   const applyCache = () => {
