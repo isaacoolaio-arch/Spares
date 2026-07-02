@@ -4836,7 +4836,21 @@ function filterParts() {
     return;
   }
 
-  document.getElementById('parts-list').innerHTML = parts.map(p => {
+  // Group parts by ItemName — merge same-name parts into one card with brand tabs
+  const groups = {};
+  parts.forEach(p => {
+    const name = (p.ItemName || p.Name || '').trim();
+    if (!groups[name]) groups[name] = [];
+    groups[name].push(p);
+  });
+
+  document.getElementById('parts-list').innerHTML = Object.entries(groups).map(([name, variants]) => {
+    const groupId = 'grp-' + variants[0].PartID;
+    // Active variant: stored in window state or first
+    const activeIdx = window._partGroupActive && window._partGroupActive[groupId] !== undefined
+      ? window._partGroupActive[groupId] : 0;
+    const p = variants[Math.min(activeIdx, variants.length - 1)];
+
     const qty      = parseInt(p.StockQty) || 0;
     const reorder  = parseInt(p.ReorderLevel) || 5;
     const outStock = qty <= 0;
@@ -4846,17 +4860,40 @@ function filterParts() {
     const stockBg    = outStock ? 'rgba(240,93,93,.12)' : lowStock ? 'rgba(245,158,11,.1)' : 'rgba(45,212,160,.1)';
     const moveIcon   = {Fast:'🔥',Medium:'⚡',Slow:'🐢',Dead:'❄️'}[p.Movement] || '⚡';
     const safeId     = p.PartID;
-    const safeName   = (p.ItemName||p.Name||'').replace(/'/g,"&#39;");
+    const safeName   = name.replace(/'/g,"&#39;");
+    const multi      = variants.length > 1;
+
+    // Brand tabs for multi-variant groups
+    const brandTabs = multi ? `
+      <div style="display:flex;gap:5px;flex-wrap:wrap;padding:0 14px 10px">
+        ${variants.map((v, i) => {
+          const vQty = parseInt(v.StockQty)||0;
+          const vOut = vQty <= 0;
+          const vLow = !vOut && vQty <= (parseInt(v.ReorderLevel)||5);
+          const isActive = i === activeIdx;
+          const dotColor = vOut ? 'var(--red)' : vLow ? '#f59e0b' : 'var(--green)';
+          const label = v.Brand || v.Size || v.PartNo || ('Variant ' + (i+1));
+          return `<button onclick="event.stopPropagation();switchPartVariant('${groupId}',${i})"
+            style="padding:4px 10px;border-radius:20px;border:1.5px solid ${isActive ? 'var(--accent)' : 'var(--border)'};
+              background:${isActive ? 'var(--accent-dim)' : 'var(--surface2)'};
+              color:${isActive ? 'var(--accent)' : 'var(--text3)'};
+              font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);
+              display:flex;align-items:center;gap:4px">
+            <span style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
+            ${label}
+          </button>`;
+        }).join('')}
+      </div>` : '';
 
     return `
-      <div style="background:var(--surface);border:1px solid var(--border);
+      <div id="card-${groupId}" style="background:var(--surface);border:1px solid var(--border);
         border-radius:var(--r-lg);margin-bottom:8px;overflow:hidden">
 
-        <!-- Main card row — tap to toggle actions -->
+        <!-- Main card row -->
         <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;cursor:pointer"
           onclick="togglePartActions('${safeId}')">
 
-        <!-- Category icon pill or part photo -->
+          <!-- Photo / icon -->
           <div style="width:42px;height:42px;border-radius:10px;flex-shrink:0;
             background:var(--surface2);border:1px solid var(--border);
             display:flex;align-items:center;justify-content:center;font-size:18px;
@@ -4870,10 +4907,11 @@ function filterParts() {
           <div style="flex:1;min-width:0">
             <div style="font-size:14px;font-weight:800;color:var(--fg);
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px">
-              ${q ? highlight(p.ItemName||p.Name, q) : (p.ItemName||p.Name)}
+              ${q ? highlight(name, q) : name}
+              ${multi ? `<span style="margin-left:5px;font-size:10px;color:var(--text3);font-weight:600">${variants.length} brands</span>` : ''}
             </div>
             <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-              ${p.Brand||p.PartNo ? `<span style="background:rgba(91,141,238,.12);color:var(--blue);
+              ${!multi && (p.Brand||p.PartNo) ? `<span style="background:rgba(91,141,238,.12);color:var(--blue);
                 padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">${p.Brand||p.PartNo}</span>` : ''}
               ${p.Size ? `<span style="background:var(--accent-dim);color:var(--accent);
                 padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">${p.Size}</span>` : ''}
@@ -4890,31 +4928,28 @@ function filterParts() {
                 padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800">
                 ${stockLabel}
               </span>
-              <span style="font-size:10px;color:var(--text3);margin-left:4px">
-                ${qty}
-              </span>
+              <span style="font-size:10px;color:var(--text3);margin-left:4px">${qty}</span>
             </div>
           </div>
 
-          <!-- Expand chevron -->
           <div id="chevron-${safeId}" style="color:var(--text3);font-size:12px;
             margin-left:4px;transition:transform .2s;flex-shrink:0">▾</div>
         </div>
 
-        <!-- Details row: cost price -->
-        <div style="padding:0 14px 8px;display:flex;gap:16px">
+        <!-- Brand tabs (only for multi-variant) -->
+        ${brandTabs}
+
+        <!-- Details row -->
+        <div id="details-${groupId}" style="padding:0 14px 8px;display:flex;gap:16px">
           <span style="font-size:11px;color:var(--text3)">
             Cost: <span style="color:var(--text2);font-family:var(--mono)">${fmtMoney(p.CostPrice)}</span>
           </span>
           <span style="font-size:11px;color:var(--text3)">
             Supplier: <span style="color:var(--text2)">${p.SupplierName||'—'}</span>
           </span>
-          ${p.Barcode ? `<span style="font-size:11px;color:var(--text3)">
-            📷 <span style="color:var(--text2);font-family:var(--mono)">${p.Barcode}</span>
-          </span>` : ''}
         </div>
 
-        <!-- Action buttons — hidden by default, shown on tap -->
+        <!-- Action buttons -->
         <div id="part-actions-${safeId}" style="display:none;border-top:1px solid var(--border);
           padding:10px 12px;display:none;gap:6px">
           <button onclick="event.stopPropagation();showPartDetail('${safeId}')"
@@ -4944,6 +4979,13 @@ function filterParts() {
         </div>
       </div>`;
   }).join('');
+}
+
+function switchPartVariant(groupId, idx) {
+  if (!window._partGroupActive) window._partGroupActive = {};
+  window._partGroupActive[groupId] = idx;
+  // Re-render just this group's card by re-running filterParts
+  filterParts();
 }
 
 function togglePartActions(partId) {
