@@ -3314,8 +3314,18 @@ function showAddPartModal(partId = null, prefillName = '') {
       customItem: false
     };
   } else {
-    // Pre-fill name from search query if provided
-    wizard.data = { itemName: prefillName || '', size:'', brand:'', cat:'', cost:'', sell:'', qty:0, reorder:5, unit:'Piece', customItem:false, move:'Fast' };
+    // Pre-fill from search query or brand variant prefill
+    const pf = window._addPartPrefill || {};
+    wizard.data = {
+      itemName: pf.ItemName || prefillName || '',
+      size: pf.Size || '',
+      brand: '',  // brand is what's new — leave blank for user to fill
+      cat: pf.Category || '',
+      cost: '', sell: '', qty: 0, reorder: 5,
+      unit: pf.Unit || 'Piece', customItem: false, move: 'Fast',
+      supplierName: pf.SupplierName || ''
+    };
+    window._addPartPrefill = null; // clear after use
   }
   renderWizard();
 }
@@ -4869,9 +4879,9 @@ function filterParts() {
     const safeName   = name.replace(/'/g,"&#39;");
     const multi      = variants.length > 1;
 
-    // Brand tabs for multi-variant groups
-    const brandTabs = multi ? `
-      <div style="display:flex;gap:5px;flex-wrap:wrap;padding:0 14px 10px">
+    // Brand tabs for multi-variant groups (always show tabs + add button)
+    const brandTabs = `
+      <div style="display:flex;gap:5px;flex-wrap:wrap;padding:0 14px 10px;align-items:center">
         ${variants.map((v, i) => {
           const vQty = parseInt(v.StockQty)||0;
           const vOut = vQty <= 0;
@@ -4879,17 +4889,29 @@ function filterParts() {
           const isActive = i === activeIdx;
           const dotColor = vOut ? 'var(--red)' : vLow ? '#f59e0b' : 'var(--green)';
           const label = v.Brand || v.Size || v.PartNo || ('Variant ' + (i+1));
-          return `<button onclick="event.stopPropagation();switchPartVariant('${groupId}',${i})"
-            style="padding:4px 10px;border-radius:20px;border:1.5px solid ${isActive ? 'var(--accent)' : 'var(--border)'};
-              background:${isActive ? 'var(--accent-dim)' : 'var(--surface2)'};
-              color:${isActive ? 'var(--accent)' : 'var(--text3)'};
-              font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);
-              display:flex;align-items:center;gap:4px">
-            <span style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
-            ${label}
-          </button>`;
+          const vSafeName = (v.ItemName||v.Name||'').replace(/'/g,"&#39;");
+          return `<div style="display:flex;align-items:center;gap:0">
+            <button onclick="event.stopPropagation();switchPartVariant('${groupId}',${i})"
+              style="padding:4px 8px;border-radius:20px 0 0 20px;border:1.5px solid ${isActive ? 'var(--accent)' : 'var(--border)'};border-right:none;
+                background:${isActive ? 'var(--accent-dim)' : 'var(--surface2)'};
+                color:${isActive ? 'var(--accent)' : 'var(--text3)'};
+                font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);
+                display:flex;align-items:center;gap:4px">
+              <span style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
+              ${label}
+            </button>
+            <button onclick="event.stopPropagation();confirmDeletePart('${v.PartID}','${vSafeName} (${label})')"
+              title="Delete ${label}"
+              style="padding:4px 6px;border-radius:0 20px 20px 0;border:1.5px solid ${isActive ? 'var(--accent)' : 'var(--border)'};
+                background:${isActive ? 'rgba(240,93,93,.15)' : 'var(--surface2)'};
+                color:var(--red);font-size:10px;cursor:pointer;line-height:1">✕</button>
+          </div>`;
         }).join('')}
-      </div>` : '';
+        <button onclick="event.stopPropagation();addBrandVariant('${groupId}')"
+          style="padding:4px 10px;border-radius:20px;border:1.5px dashed var(--border);
+            background:transparent;color:var(--text3);font-size:11px;font-weight:700;
+            cursor:pointer;font-family:var(--font)">+ Brand</button>
+      </div>`;
 
     return `
       <div id="card-${groupId}" style="background:var(--surface);border:1px solid var(--border);
@@ -4990,8 +5012,24 @@ function filterParts() {
 function switchPartVariant(groupId, idx) {
   if (!window._partGroupActive) window._partGroupActive = {};
   window._partGroupActive[groupId] = idx;
-  // Re-render just this group's card by re-running filterParts
   filterParts();
+}
+
+function addBrandVariant(groupId) {
+  // Find the group's base part to pre-fill name/size/category
+  const basePartId = groupId.replace('grp-', '');
+  const base = state.parts.find(p => p.PartID === basePartId);
+  if (!base) return;
+  // Open the Add Part modal pre-filled with same name, size, category
+  // Store prefill data globally for the modal to pick up
+  window._addPartPrefill = {
+    ItemName: base.ItemName || base.Name || '',
+    Size:     base.Size || '',
+    Category: base.Category || '',
+    SupplierName: base.SupplierName || '',
+    Unit:     base.Unit || 'Piece'
+  };
+  showAddPartModal();
 }
 
 function togglePartActions(partId) {
