@@ -1496,7 +1496,6 @@ const IDB = {
       const req = indexedDB.open('OolaSpares', 5);
       req.onupgradeneeded = e => {
         const db = e.target.result;
-        // Main data stores
         const storeConfigs = [
           ['parts',         { keyPath: 'PartID' }],
           ['suppliers',     { keyPath: 'SupplierID' }],
@@ -1508,12 +1507,14 @@ const IDB = {
           ['expenses',      { keyPath: 'ExpenseID' }],
           ['settings',      { keyPath: 'key' }]
         ];
+        // Recreate data stores with correct keyPaths (drop old keyless ones)
         storeConfigs.forEach(([store, opts]) => {
-          if (!db.objectStoreNames.contains(store)) {
-            db.createObjectStore(store, opts);
+          if (db.objectStoreNames.contains(store)) {
+            db.deleteObjectStore(store);
           }
+          db.createObjectStore(store, opts);
         });
-        // Sync queue for pending offline changes
+        // Sync queue — preserve if exists (don't lose pending offline writes)
         if (!db.objectStoreNames.contains('syncQueue')) {
           db.createObjectStore('syncQueue', { autoIncrement: true });
         }
@@ -1534,17 +1535,28 @@ const IDB = {
   async setAll(store, items) {
     if (!items || !Array.isArray(items)) return;
     const db = await this.open();
+    // Ensure each item has the store's keyPath so put() succeeds
+    const keyMap = { parts:'PartID', suppliers:'SupplierID', sales:'SaleID',
+      purchases:'PurchaseID', checklist:'ItemID', customers:'CustomerID',
+      expenses:'ExpenseID', settings:'key' };
+    const kp = keyMap[store];
     return new Promise((resolve) => {
       try {
         const tx = db.transaction(store, 'readwrite');
         const os = tx.objectStore(store);
         os.clear();
-        items.forEach(item => {
-          try { os.put(item); } catch(e2) {}
+        items.forEach((item, idx) => {
+          try {
+            // Give item a key if missing (except autoIncrement stores)
+            if (kp && (item[kp] === undefined || item[kp] === null || item[kp] === '')) {
+              item[kp] = store.slice(0,3).toUpperCase() + '-' + Date.now() + '-' + idx;
+            }
+            os.put(item);
+          } catch(e2) { console.log('put fail', store, e2.message); }
         });
         tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve(); // resolve even on error to not break app
-      } catch(e) { resolve(); }
+        tx.onerror = () => resolve();
+      } catch(e) { console.log('setAll fail', store, e.message); resolve(); }
     });
   },
   async addToQueue(action, data) {
