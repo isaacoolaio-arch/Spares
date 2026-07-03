@@ -3056,7 +3056,7 @@ function showImportModal() {
 
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
       <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Or use your prepared list</div>
-      <button class="btn btn-primary" onclick="importFromBajajList()">⚡ Import from Bajaj Master List</button>
+      <button class="btn btn-primary" onclick="importFromBajajList()">➕ Add Bajaj Parts (Checklist)</button>
       <div style="font-size:11px;color:var(--text3);margin-top:6px;text-align:center">Loads all 90 items from the built-in list with default prices of 0 — you fill prices after</div>
     </div>
   `);
@@ -3154,7 +3154,7 @@ function showImportCSVHelp() {
       Name, Category, Size, Brand, Cost Price, Selling Price, Qty, Movement
     </div>
     <button class="btn btn-ghost" style="margin-top:16px" onclick="showImportModal()">← Back to Import</button>
-    <button class="btn btn-primary" style="margin-top:8px" onclick="importFromBajajList()">⚡ Use Built-in List Instead</button>
+    <button class="btn btn-primary" style="margin-top:8px" onclick="importFromBajajList()">➕ Add Bajaj Parts (Checklist)</button>
   `);
 }
 
@@ -3243,31 +3243,123 @@ async function confirmCSVImport(rows, ni, ci, si, bi, costi, selli, qi, mi) {
 }
 
 async function importFromBajajList() {
-  // Import all 90 items from BAJAJ_ITEMS with 0 prices
-  const existing = new Set(state.parts.map(p => p.Name.toLowerCase()));
-  const toImport = BAJAJ_ITEMS.filter(item => !existing.has(item.name.toLowerCase()));
+  // Show a checklist of missing Bajaj parts grouped by category
+  const existing = new Set(state.parts.map(p => (p.ItemName||p.Name||'').toLowerCase()));
+  const missing = BAJAJ_ITEMS.filter(item => !existing.has(item.name.toLowerCase()));
 
-  if (toImport.length === 0) { toast('All items already in catalogue', 'error'); return; }
+  if (missing.length === 0) { toast('All common Bajaj parts already in your catalogue!', 'success'); return; }
+
+  // Group by category
+  const byCat = {};
+  missing.forEach(item => {
+    if (!byCat[item.cat]) byCat[item.cat] = [];
+    byCat[item.cat].push(item);
+  });
+
+  // Track selections globally
+  window._bajajSelected = new Set();
+
+  const catBlocks = Object.entries(byCat).map(([cat, items]) => `
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1.5px solid var(--accent);margin-bottom:4px">
+        <span style="font-size:13px;font-weight:800;color:var(--accent)">${cat}</span>
+        <button onclick="toggleBajajCat('${cat.replace(/'/g,"&#39;")}')"
+          style="font-size:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text3);border-radius:12px;padding:2px 10px;cursor:pointer;font-family:var(--font)">Select all</button>
+      </div>
+      ${items.map(i => {
+        const id = 'bajaj-' + i.name.replace(/[^a-z0-9]/gi,'');
+        const move = i.move==='Fast'?'🔥':i.move==='Medium'?'⚡':'🐢';
+        return `
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+          <input type="checkbox" id="${id}" data-name="${i.name.replace(/"/g,'&quot;')}" data-cat="${cat}"
+            onchange="onBajajCheck(this)"
+            style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" />
+          <span style="flex:1;font-size:13px;color:var(--fg)">${i.name}</span>
+          ${i.sizes && i.sizes.length ? `<span style="font-size:10px;color:var(--text3)">${i.sizes.length} sizes</span>` : ''}
+          <span style="font-size:12px">${move}</span>
+        </label>`;
+      }).join('')}
+    </div>
+  `).join('');
 
   showModal(`
     <div class="modal-header">
-      <div class="modal-title">Import ${toImport.length} Items</div>
+      <div class="modal-title">➕ Add Bajaj Parts</div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.7">
-      This will add <strong style="color:var(--accent)">${toImport.length} items</strong> to your Parts Catalogue with <strong>0 prices</strong> and <strong>0 stock</strong>.<br><br>
-      After importing, go through each part and set the cost price, selling price, and opening stock quantity.
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.6">
+      Tick the parts you want to add. They'll be created with <strong>0 price</strong> and <strong>0 stock</strong> — set those afterward. Showing <strong style="color:var(--accent)">${missing.length}</strong> parts not yet in your catalogue.
     </div>
-    <div style="max-height:200px;overflow-y:auto;margin-bottom:16px">
-      ${toImport.map(i => `
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-          <span>${i.name}</span>
-          <span style="color:var(--text3)">${i.cat} · ${i.move==='Fast'?'🔥':i.move==='Medium'?'⚡':'🐢'}</span>
-        </div>`).join('')}
+    <div style="margin-bottom:10px;display:flex;gap:8px">
+      <button onclick="selectAllBajaj(true)" style="flex:1;font-size:12px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:8px;cursor:pointer;font-weight:700;font-family:var(--font)">✓ Select All</button>
+      <button onclick="selectAllBajaj(false)" style="flex:1;font-size:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text3);border-radius:8px;padding:8px;cursor:pointer;font-weight:700;font-family:var(--font)">Clear</button>
     </div>
-    <button class="btn btn-primary" id="confirm-import-btn" onclick="runBajajImport()">✓ Import All ${toImport.length} Items</button>
-    <button class="btn btn-ghost" style="margin-top:8px" onclick="showImportModal()">← Back</button>
+    <div style="max-height:45vh;overflow-y:auto;margin-bottom:14px;padding-right:4px">
+      ${catBlocks}
+    </div>
+    <button class="btn btn-primary" id="bajaj-add-btn" onclick="runBajajChecklistImport()">
+      Add <span id="bajaj-count">0</span> Selected Parts
+    </button>
   `);
+  updateBajajCount();
+}
+
+function onBajajCheck(cb) {
+  if (!window._bajajSelected) window._bajajSelected = new Set();
+  if (cb.checked) window._bajajSelected.add(cb.dataset.name);
+  else window._bajajSelected.delete(cb.dataset.name);
+  updateBajajCount();
+}
+
+function toggleBajajCat(cat) {
+  const boxes = document.querySelectorAll('input[data-cat="' + cat + '"]');
+  const allChecked = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => { b.checked = !allChecked; onBajajCheck(b); });
+}
+
+function selectAllBajaj(select) {
+  document.querySelectorAll('input[id^="bajaj-"]').forEach(b => {
+    b.checked = select; onBajajCheck(b);
+  });
+}
+
+function updateBajajCount() {
+  const n = window._bajajSelected ? window._bajajSelected.size : 0;
+  const el = document.getElementById('bajaj-count');
+  if (el) el.textContent = n;
+  const btn = document.getElementById('bajaj-add-btn');
+  if (btn) btn.disabled = n === 0;
+}
+
+async function runBajajChecklistImport() {
+  const selected = window._bajajSelected ? Array.from(window._bajajSelected) : [];
+  if (!selected.length) { toast('Select at least one part', 'error'); return; }
+
+  const toImport = BAJAJ_ITEMS.filter(i => selected.includes(i.name));
+  const btn = document.getElementById('bajaj-add-btn');
+  if (btn) { btn.textContent = 'Adding...'; btn.disabled = true; }
+
+  let done = 0;
+  for (const item of toImport) {
+    const partData = {
+      ItemName: item.name, Name: item.name,
+      Category: item.cat, Brand: '', Size: (item.sizes && item.sizes[0]) || '',
+      CostPrice: 0, SellingPrice: 0, StockQty: 0, ReorderLevel: 5,
+      Movement: item.move || 'Medium', Unit: 'Piece',
+      SupplierName: ''
+    };
+    try {
+      await api('savePart', partData);
+      done++;
+      if (btn) btn.textContent = `Adding... ${done}/${toImport.length}`;
+    } catch(e) {}
+  }
+
+  await loadAll();
+  filterParts();
+  closeModal();
+  toast(`Added ${done} Bajaj part${done>1?'s':''} — now set prices & stock`, 'success');
+  window._bajajSelected = null;
 }
 
 async function runBajajImport() {
@@ -4437,7 +4529,7 @@ function showImportModal() {
 
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
       <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Or use your prepared list</div>
-      <button class="btn btn-primary" onclick="importFromBajajList()">⚡ Import from Bajaj Master List</button>
+      <button class="btn btn-primary" onclick="importFromBajajList()">➕ Add Bajaj Parts (Checklist)</button>
       <div style="font-size:11px;color:var(--text3);margin-top:6px;text-align:center">Loads all 90 items from the built-in list with default prices of 0 — you fill prices after</div>
     </div>
   `);
@@ -4535,7 +4627,7 @@ function showImportCSVHelp() {
       Name, Category, Size, Brand, Cost Price, Selling Price, Qty, Movement
     </div>
     <button class="btn btn-ghost" style="margin-top:16px" onclick="showImportModal()">← Back to Import</button>
-    <button class="btn btn-primary" style="margin-top:8px" onclick="importFromBajajList()">⚡ Use Built-in List Instead</button>
+    <button class="btn btn-primary" style="margin-top:8px" onclick="importFromBajajList()">➕ Add Bajaj Parts (Checklist)</button>
   `);
 }
 
@@ -4624,31 +4716,123 @@ async function confirmCSVImport(rows, ni, ci, si, bi, costi, selli, qi, mi) {
 }
 
 async function importFromBajajList() {
-  // Import all 90 items from BAJAJ_ITEMS with 0 prices
-  const existing = new Set(state.parts.map(p => p.Name.toLowerCase()));
-  const toImport = BAJAJ_ITEMS.filter(item => !existing.has(item.name.toLowerCase()));
+  // Show a checklist of missing Bajaj parts grouped by category
+  const existing = new Set(state.parts.map(p => (p.ItemName||p.Name||'').toLowerCase()));
+  const missing = BAJAJ_ITEMS.filter(item => !existing.has(item.name.toLowerCase()));
 
-  if (toImport.length === 0) { toast('All items already in catalogue', 'error'); return; }
+  if (missing.length === 0) { toast('All common Bajaj parts already in your catalogue!', 'success'); return; }
+
+  // Group by category
+  const byCat = {};
+  missing.forEach(item => {
+    if (!byCat[item.cat]) byCat[item.cat] = [];
+    byCat[item.cat].push(item);
+  });
+
+  // Track selections globally
+  window._bajajSelected = new Set();
+
+  const catBlocks = Object.entries(byCat).map(([cat, items]) => `
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1.5px solid var(--accent);margin-bottom:4px">
+        <span style="font-size:13px;font-weight:800;color:var(--accent)">${cat}</span>
+        <button onclick="toggleBajajCat('${cat.replace(/'/g,"&#39;")}')"
+          style="font-size:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text3);border-radius:12px;padding:2px 10px;cursor:pointer;font-family:var(--font)">Select all</button>
+      </div>
+      ${items.map(i => {
+        const id = 'bajaj-' + i.name.replace(/[^a-z0-9]/gi,'');
+        const move = i.move==='Fast'?'🔥':i.move==='Medium'?'⚡':'🐢';
+        return `
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+          <input type="checkbox" id="${id}" data-name="${i.name.replace(/"/g,'&quot;')}" data-cat="${cat}"
+            onchange="onBajajCheck(this)"
+            style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer" />
+          <span style="flex:1;font-size:13px;color:var(--fg)">${i.name}</span>
+          ${i.sizes && i.sizes.length ? `<span style="font-size:10px;color:var(--text3)">${i.sizes.length} sizes</span>` : ''}
+          <span style="font-size:12px">${move}</span>
+        </label>`;
+      }).join('')}
+    </div>
+  `).join('');
 
   showModal(`
     <div class="modal-header">
-      <div class="modal-title">Import ${toImport.length} Items</div>
+      <div class="modal-title">➕ Add Bajaj Parts</div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.7">
-      This will add <strong style="color:var(--accent)">${toImport.length} items</strong> to your Parts Catalogue with <strong>0 prices</strong> and <strong>0 stock</strong>.<br><br>
-      After importing, go through each part and set the cost price, selling price, and opening stock quantity.
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.6">
+      Tick the parts you want to add. They'll be created with <strong>0 price</strong> and <strong>0 stock</strong> — set those afterward. Showing <strong style="color:var(--accent)">${missing.length}</strong> parts not yet in your catalogue.
     </div>
-    <div style="max-height:200px;overflow-y:auto;margin-bottom:16px">
-      ${toImport.map(i => `
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-          <span>${i.name}</span>
-          <span style="color:var(--text3)">${i.cat} · ${i.move==='Fast'?'🔥':i.move==='Medium'?'⚡':'🐢'}</span>
-        </div>`).join('')}
+    <div style="margin-bottom:10px;display:flex;gap:8px">
+      <button onclick="selectAllBajaj(true)" style="flex:1;font-size:12px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:8px;cursor:pointer;font-weight:700;font-family:var(--font)">✓ Select All</button>
+      <button onclick="selectAllBajaj(false)" style="flex:1;font-size:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text3);border-radius:8px;padding:8px;cursor:pointer;font-weight:700;font-family:var(--font)">Clear</button>
     </div>
-    <button class="btn btn-primary" id="confirm-import-btn" onclick="runBajajImport()">✓ Import All ${toImport.length} Items</button>
-    <button class="btn btn-ghost" style="margin-top:8px" onclick="showImportModal()">← Back</button>
+    <div style="max-height:45vh;overflow-y:auto;margin-bottom:14px;padding-right:4px">
+      ${catBlocks}
+    </div>
+    <button class="btn btn-primary" id="bajaj-add-btn" onclick="runBajajChecklistImport()">
+      Add <span id="bajaj-count">0</span> Selected Parts
+    </button>
   `);
+  updateBajajCount();
+}
+
+function onBajajCheck(cb) {
+  if (!window._bajajSelected) window._bajajSelected = new Set();
+  if (cb.checked) window._bajajSelected.add(cb.dataset.name);
+  else window._bajajSelected.delete(cb.dataset.name);
+  updateBajajCount();
+}
+
+function toggleBajajCat(cat) {
+  const boxes = document.querySelectorAll('input[data-cat="' + cat + '"]');
+  const allChecked = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => { b.checked = !allChecked; onBajajCheck(b); });
+}
+
+function selectAllBajaj(select) {
+  document.querySelectorAll('input[id^="bajaj-"]').forEach(b => {
+    b.checked = select; onBajajCheck(b);
+  });
+}
+
+function updateBajajCount() {
+  const n = window._bajajSelected ? window._bajajSelected.size : 0;
+  const el = document.getElementById('bajaj-count');
+  if (el) el.textContent = n;
+  const btn = document.getElementById('bajaj-add-btn');
+  if (btn) btn.disabled = n === 0;
+}
+
+async function runBajajChecklistImport() {
+  const selected = window._bajajSelected ? Array.from(window._bajajSelected) : [];
+  if (!selected.length) { toast('Select at least one part', 'error'); return; }
+
+  const toImport = BAJAJ_ITEMS.filter(i => selected.includes(i.name));
+  const btn = document.getElementById('bajaj-add-btn');
+  if (btn) { btn.textContent = 'Adding...'; btn.disabled = true; }
+
+  let done = 0;
+  for (const item of toImport) {
+    const partData = {
+      ItemName: item.name, Name: item.name,
+      Category: item.cat, Brand: '', Size: (item.sizes && item.sizes[0]) || '',
+      CostPrice: 0, SellingPrice: 0, StockQty: 0, ReorderLevel: 5,
+      Movement: item.move || 'Medium', Unit: 'Piece',
+      SupplierName: ''
+    };
+    try {
+      await api('savePart', partData);
+      done++;
+      if (btn) btn.textContent = `Adding... ${done}/${toImport.length}`;
+    } catch(e) {}
+  }
+
+  await loadAll();
+  filterParts();
+  closeModal();
+  toast(`Added ${done} Bajaj part${done>1?'s':''} — now set prices & stock`, 'success');
+  window._bajajSelected = null;
 }
 
 async function runBajajImport() {
