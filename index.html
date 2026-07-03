@@ -3243,10 +3243,46 @@ async function confirmCSVImport(rows, ni, ci, si, bi, costi, selli, qi, mi) {
   toast(`Imported ${done} items ✓`, 'success');
 }
 
+// Normalize a part name for fuzzy comparison
+function normalizePartName(name) {
+  return (name||'')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g,' ')           // strip punctuation
+    .replace(/\b(standard|std|the|a|for|bajaj|motorcycle|part|parts)\b/g,'') // drop filler words
+    .replace(/\s+/g,' ')
+    .trim();
+}
+// Get significant words (3+ chars) from a name as a Set
+function partWords(name) {
+  return new Set(normalizePartName(name).split(' ').filter(w => w.length >= 3));
+}
+// Check if a Bajaj item likely already exists (fuzzy)
+function bajajPartExists(bajajName) {
+  const targetWords = partWords(bajajName);
+  const targetNorm = normalizePartName(bajajName);
+  if (!targetWords.size) return false;
+
+  return state.parts.some(p => {
+    const pName = p.ItemName || p.Name || '';
+    const pNorm = normalizePartName(pName);
+    // Exact normalized match
+    if (pNorm === targetNorm) return true;
+    // One contains the other
+    if (pNorm.includes(targetNorm) || targetNorm.includes(pNorm)) return true;
+    // Word overlap — if all target words appear in the part name
+    const pWords = partWords(pName);
+    let matched = 0;
+    targetWords.forEach(w => { if (pWords.has(w)) matched++; });
+    // Consider a match if 100% of target words are present (or ≥2 words and ≥70%)
+    if (matched === targetWords.size) return true;
+    if (targetWords.size >= 2 && matched / targetWords.size >= 0.7) return true;
+    return false;
+  });
+}
+
 async function importFromBajajList() {
-  // Show a checklist of missing Bajaj parts grouped by category
-  const existing = new Set(state.parts.map(p => (p.ItemName||p.Name||'').toLowerCase()));
-  const missing = BAJAJ_ITEMS.filter(item => !existing.has(item.name.toLowerCase()));
+  // Show a checklist of missing Bajaj parts — fuzzy match against existing
+  const missing = BAJAJ_ITEMS.filter(item => !bajajPartExists(item.name));
 
   if (missing.length === 0) { toast('All common Bajaj parts already in your catalogue!', 'success'); return; }
 
@@ -4716,10 +4752,46 @@ async function confirmCSVImport(rows, ni, ci, si, bi, costi, selli, qi, mi) {
   toast(`Imported ${done} items ✓`, 'success');
 }
 
+// Normalize a part name for fuzzy comparison
+function normalizePartName(name) {
+  return (name||'')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g,' ')           // strip punctuation
+    .replace(/\b(standard|std|the|a|for|bajaj|motorcycle|part|parts)\b/g,'') // drop filler words
+    .replace(/\s+/g,' ')
+    .trim();
+}
+// Get significant words (3+ chars) from a name as a Set
+function partWords(name) {
+  return new Set(normalizePartName(name).split(' ').filter(w => w.length >= 3));
+}
+// Check if a Bajaj item likely already exists (fuzzy)
+function bajajPartExists(bajajName) {
+  const targetWords = partWords(bajajName);
+  const targetNorm = normalizePartName(bajajName);
+  if (!targetWords.size) return false;
+
+  return state.parts.some(p => {
+    const pName = p.ItemName || p.Name || '';
+    const pNorm = normalizePartName(pName);
+    // Exact normalized match
+    if (pNorm === targetNorm) return true;
+    // One contains the other
+    if (pNorm.includes(targetNorm) || targetNorm.includes(pNorm)) return true;
+    // Word overlap — if all target words appear in the part name
+    const pWords = partWords(pName);
+    let matched = 0;
+    targetWords.forEach(w => { if (pWords.has(w)) matched++; });
+    // Consider a match if 100% of target words are present (or ≥2 words and ≥70%)
+    if (matched === targetWords.size) return true;
+    if (targetWords.size >= 2 && matched / targetWords.size >= 0.7) return true;
+    return false;
+  });
+}
+
 async function importFromBajajList() {
-  // Show a checklist of missing Bajaj parts grouped by category
-  const existing = new Set(state.parts.map(p => (p.ItemName||p.Name||'').toLowerCase()));
-  const missing = BAJAJ_ITEMS.filter(item => !existing.has(item.name.toLowerCase()));
+  // Show a checklist of missing Bajaj parts — fuzzy match against existing
+  const missing = BAJAJ_ITEMS.filter(item => !bajajPartExists(item.name));
 
   if (missing.length === 0) { toast('All common Bajaj parts already in your catalogue!', 'success'); return; }
 
