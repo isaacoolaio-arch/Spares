@@ -3280,11 +3280,68 @@ function bajajPartExists(bajajName) {
   });
 }
 
+// Return the existing part that matched a Bajaj item (for verification)
+function bajajMatchedPart(bajajName) {
+  const targetWords = partWords(bajajName);
+  const targetNorm = normalizePartName(bajajName);
+  if (!targetWords.size) return null;
+  for (const p of state.parts) {
+    const pName = p.ItemName || p.Name || '';
+    const pNorm = normalizePartName(pName);
+    if (pNorm === targetNorm) return pName;
+    if (pNorm.includes(targetNorm) || targetNorm.includes(pNorm)) return pName;
+    const pWords = partWords(pName);
+    let matched = 0;
+    targetWords.forEach(w => { if (pWords.has(w)) matched++; });
+    if (matched === targetWords.size) return pName;
+    if (targetWords.size >= 2 && matched / targetWords.size >= 0.7) return pName;
+  }
+  return null;
+}
+
+function showBajajMatchReport() {
+  const matched = [];
+  const missing = [];
+  BAJAJ_ITEMS.forEach(item => {
+    const m = bajajMatchedPart(item.name);
+    if (m) matched.push({ bajaj: item.name, existing: m });
+    else missing.push(item.name);
+  });
+
+  showModal(`
+    <div class="modal-header">
+      <div class="modal-title">🔍 Match Report</div>
+      <button class="modal-close" onclick="importFromBajajList()">← Back</button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6">
+      Shows how the smart matcher paired each Bajaj part with your existing catalogue.
+      <strong style="color:var(--green)">${matched.length} matched</strong> · <strong style="color:var(--accent)">${missing.length} new</strong>
+    </div>
+    <div style="max-height:55vh;overflow-y:auto">
+      <div style="font-size:12px;font-weight:800;color:var(--green);padding:8px 0;border-bottom:1.5px solid var(--green);margin-bottom:6px">✓ ALREADY HAVE (matched)</div>
+      ${matched.length ? matched.map(m => `
+        <div style="padding:7px 4px;border-bottom:1px solid var(--border);font-size:12px">
+          <div style="color:var(--text2)">${m.bajaj}</div>
+          <div style="color:var(--green);font-size:11px;margin-top:2px">↳ matched to: <strong>${m.existing}</strong></div>
+        </div>`).join('') : '<div style="color:var(--text3);font-size:12px;padding:8px 0">None</div>'}
+
+      <div style="font-size:12px;font-weight:800;color:var(--accent);padding:8px 0;border-bottom:1.5px solid var(--accent);margin:14px 0 6px">➕ NOT YET IN CATALOGUE (new)</div>
+      ${missing.length ? missing.map(m => `
+        <div style="padding:7px 4px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2)">${m}</div>`).join('') : '<div style="color:var(--text3);font-size:12px;padding:8px 0">None — you have everything!</div>'}
+    </div>
+    <button class="btn btn-primary" style="margin-top:12px" onclick="importFromBajajList()">← Back to Checklist</button>
+  `);
+}
+
 async function importFromBajajList() {
   // Show a checklist of missing Bajaj parts — fuzzy match against existing
   const missing = BAJAJ_ITEMS.filter(item => !bajajPartExists(item.name));
 
-  if (missing.length === 0) { toast('All common Bajaj parts already in your catalogue!', 'success'); return; }
+  if (missing.length === 0) {
+    // Everything matched — still let them see the report
+    showBajajMatchReport();
+    return;
+  }
 
   // Group by category
   const byCat = {};
@@ -3324,9 +3381,10 @@ async function importFromBajajList() {
       <div class="modal-title">➕ Add Bajaj Parts</div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.6">
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px;line-height:1.6">
       Tick the parts you want to add. They'll be created with <strong>0 price</strong> and <strong>0 stock</strong> — set those afterward. Showing <strong style="color:var(--accent)">${missing.length}</strong> parts not yet in your catalogue.
     </div>
+    <button onclick="showBajajMatchReport()" style="width:100%;margin-bottom:12px;padding:8px;border-radius:8px;border:1px solid rgba(45,212,160,.3);background:rgba(45,212,160,.08);color:var(--green);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">🔍 See which parts I already have</button>
     <div style="margin-bottom:10px;display:flex;gap:8px">
       <button onclick="selectAllBajaj(true)" style="flex:1;font-size:12px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:8px;cursor:pointer;font-weight:700;font-family:var(--font)">✓ Select All</button>
       <button onclick="selectAllBajaj(false)" style="flex:1;font-size:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text3);border-radius:8px;padding:8px;cursor:pointer;font-weight:700;font-family:var(--font)">Clear</button>
@@ -4789,11 +4847,68 @@ function bajajPartExists(bajajName) {
   });
 }
 
+// Return the existing part that matched a Bajaj item (for verification)
+function bajajMatchedPart(bajajName) {
+  const targetWords = partWords(bajajName);
+  const targetNorm = normalizePartName(bajajName);
+  if (!targetWords.size) return null;
+  for (const p of state.parts) {
+    const pName = p.ItemName || p.Name || '';
+    const pNorm = normalizePartName(pName);
+    if (pNorm === targetNorm) return pName;
+    if (pNorm.includes(targetNorm) || targetNorm.includes(pNorm)) return pName;
+    const pWords = partWords(pName);
+    let matched = 0;
+    targetWords.forEach(w => { if (pWords.has(w)) matched++; });
+    if (matched === targetWords.size) return pName;
+    if (targetWords.size >= 2 && matched / targetWords.size >= 0.7) return pName;
+  }
+  return null;
+}
+
+function showBajajMatchReport() {
+  const matched = [];
+  const missing = [];
+  BAJAJ_ITEMS.forEach(item => {
+    const m = bajajMatchedPart(item.name);
+    if (m) matched.push({ bajaj: item.name, existing: m });
+    else missing.push(item.name);
+  });
+
+  showModal(`
+    <div class="modal-header">
+      <div class="modal-title">🔍 Match Report</div>
+      <button class="modal-close" onclick="importFromBajajList()">← Back</button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6">
+      Shows how the smart matcher paired each Bajaj part with your existing catalogue.
+      <strong style="color:var(--green)">${matched.length} matched</strong> · <strong style="color:var(--accent)">${missing.length} new</strong>
+    </div>
+    <div style="max-height:55vh;overflow-y:auto">
+      <div style="font-size:12px;font-weight:800;color:var(--green);padding:8px 0;border-bottom:1.5px solid var(--green);margin-bottom:6px">✓ ALREADY HAVE (matched)</div>
+      ${matched.length ? matched.map(m => `
+        <div style="padding:7px 4px;border-bottom:1px solid var(--border);font-size:12px">
+          <div style="color:var(--text2)">${m.bajaj}</div>
+          <div style="color:var(--green);font-size:11px;margin-top:2px">↳ matched to: <strong>${m.existing}</strong></div>
+        </div>`).join('') : '<div style="color:var(--text3);font-size:12px;padding:8px 0">None</div>'}
+
+      <div style="font-size:12px;font-weight:800;color:var(--accent);padding:8px 0;border-bottom:1.5px solid var(--accent);margin:14px 0 6px">➕ NOT YET IN CATALOGUE (new)</div>
+      ${missing.length ? missing.map(m => `
+        <div style="padding:7px 4px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2)">${m}</div>`).join('') : '<div style="color:var(--text3);font-size:12px;padding:8px 0">None — you have everything!</div>'}
+    </div>
+    <button class="btn btn-primary" style="margin-top:12px" onclick="importFromBajajList()">← Back to Checklist</button>
+  `);
+}
+
 async function importFromBajajList() {
   // Show a checklist of missing Bajaj parts — fuzzy match against existing
   const missing = BAJAJ_ITEMS.filter(item => !bajajPartExists(item.name));
 
-  if (missing.length === 0) { toast('All common Bajaj parts already in your catalogue!', 'success'); return; }
+  if (missing.length === 0) {
+    // Everything matched — still let them see the report
+    showBajajMatchReport();
+    return;
+  }
 
   // Group by category
   const byCat = {};
@@ -4833,9 +4948,10 @@ async function importFromBajajList() {
       <div class="modal-title">➕ Add Bajaj Parts</div>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.6">
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px;line-height:1.6">
       Tick the parts you want to add. They'll be created with <strong>0 price</strong> and <strong>0 stock</strong> — set those afterward. Showing <strong style="color:var(--accent)">${missing.length}</strong> parts not yet in your catalogue.
     </div>
+    <button onclick="showBajajMatchReport()" style="width:100%;margin-bottom:12px;padding:8px;border-radius:8px;border:1px solid rgba(45,212,160,.3);background:rgba(45,212,160,.08);color:var(--green);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">🔍 See which parts I already have</button>
     <div style="margin-bottom:10px;display:flex;gap:8px">
       <button onclick="selectAllBajaj(true)" style="flex:1;font-size:12px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:8px;cursor:pointer;font-weight:700;font-family:var(--font)">✓ Select All</button>
       <button onclick="selectAllBajaj(false)" style="flex:1;font-size:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text3);border-radius:8px;padding:8px;cursor:pointer;font-weight:700;font-family:var(--font)">Clear</button>
