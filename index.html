@@ -31,6 +31,8 @@
   <!-- Export libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- jsQR: pure-JS QR fallback for devices where native BarcodeDetector fails -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
   <!-- Barcode/QR scanner -->
   <!-- BarcodeDetector: native on Chrome/Android, polyfill for Safari/iOS -->
   <script>
@@ -11429,7 +11431,20 @@ async function _runNativeScanner(video) {
         canvas.width  = video.videoWidth;
         canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const barcodes = await detector.detect(canvas);
+        let barcodes = [];
+        try { barcodes = await detector.detect(canvas); } catch(e) {}
+
+        // Fallback: if native detector found nothing, try jsQR (pure JS QR reader)
+        if ((!barcodes || barcodes.length === 0) && typeof jsQR !== 'undefined') {
+          try {
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const qr = jsQR(imgData.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+            if (qr && qr.data) {
+              barcodes = [{ rawValue: qr.data, boundingBox: null }];
+            }
+          } catch(e) {}
+        }
+
         if (barcodes && barcodes.length > 0) {
           // Pick the code most centered in the frame (best focus)
           let best = barcodes[0];
