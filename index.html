@@ -11488,10 +11488,34 @@ function onBarcodeScanned(code) {
   window._scannedCode = code;
   const status = document.getElementById('scanner-status');
   if (status) status.textContent = '✓ ' + code;
-  const part = state.parts.find(p =>
+  // Find ALL parts sharing this code (NYC brand seals are non-unique!)
+  const matchingParts = state.parts.filter(p =>
     String(p.Barcode||'').trim() === String(code).trim() ||
     String(p.PartID).trim() === String(code).trim()
   );
+  const part = matchingParts[0];
+
+  // Warn if this code is shared by multiple products (brand seal, not unique)
+  if (matchingParts.length > 1) {
+    window._scannedPart = part;
+    const actionsEl = document.getElementById('scanner-actions');
+    if (actionsEl) {
+      actionsEl.style.display = 'block';
+      document.getElementById('scanner-part-name').innerHTML =
+        '⚠️ This code is on ' + matchingParts.length + ' products';
+      document.getElementById('scanner-part-info').innerHTML =
+        '<div style="margin-top:6px;font-size:11px;color:var(--text3)">This looks like a brand seal, not a unique code. Pick the right product:</div>' +
+        '<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">' +
+        matchingParts.map(mp => {
+          const q = parseInt(mp.StockQty)||0;
+          return '<button onclick="pickScannedPart(&#39;' + mp.PartID + '&#39;)" style="text-align:left;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--fg);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">' +
+            (mp.ItemName||mp.Name) + (mp.Brand?' · '+mp.Brand:'') + (mp.Size?' · '+mp.Size:'') +
+            '<span style="float:right;color:var(--text3);font-weight:500">Stock: ' + q + '</span></button>';
+        }).join('') + '</div>';
+    }
+    return;
+  }
+
   if (part) {
     window._scannedPart = part;
     document.getElementById('scanner-actions').style.display = 'block';
@@ -11505,6 +11529,17 @@ function onBarcodeScanned(code) {
     const el = document.getElementById('scanner-scanned-code');
     if (el) el.textContent = code;
   }
+}
+
+function pickScannedPart(partId) {
+  const part = state.parts.find(p => p.PartID === partId);
+  if (!part) return;
+  window._scannedPart = part;
+  document.getElementById('scanner-part-name').textContent = part.ItemName || part.Name;
+  const qty = parseInt(part.StockQty)||0;
+  const stockColor = qty<=0?'var(--red)':qty<=(parseInt(part.ReorderLevel)||5)?'#f59e0b':'var(--green)';
+  document.getElementById('scanner-part-info').innerHTML =
+    `Stock: <span style="color:${stockColor};font-weight:700">${qty}</span> · ${fmtMoney(part.SellingPrice)}/unit · ${part.Category||''}`;
 }
 
 function resetScanner() {
