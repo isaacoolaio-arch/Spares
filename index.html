@@ -11413,21 +11413,28 @@ async function _runNativeScanner(video) {
       return;
     }
   }
+  // Offscreen canvas — detecting on a canvas snapshot is far more reliable
+  // on Chrome Android than detecting on the live <video> element
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
   let scanning = false;
   const scan = async () => {
     if (!_scannerActive) return;
-    // Skip if a detect is already in flight (prevents pile-up on slow frames)
     if (scanning) { requestAnimationFrame(scan); return; }
     scanning = true;
     try {
-      // Only scan when video has valid frame data
       if (video.readyState >= 2 && video.videoWidth > 0) {
-        const barcodes = await detector.detect(video);
+        // Snapshot the current frame to canvas, then detect on it
+        canvas.width  = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const barcodes = await detector.detect(canvas);
         if (barcodes && barcodes.length > 0) {
           // Pick the code most centered in the frame (best focus)
           let best = barcodes[0];
           if (barcodes.length > 1) {
-            const cx = video.videoWidth / 2, cy = video.videoHeight / 2;
+            const cx = canvas.width / 2, cy = canvas.height / 2;
             best = barcodes.reduce((a, b) => {
               const da = a.boundingBox ? Math.hypot(a.boundingBox.x + a.boundingBox.width/2 - cx, a.boundingBox.y + a.boundingBox.height/2 - cy) : 9e9;
               const db = b.boundingBox ? Math.hypot(b.boundingBox.x + b.boundingBox.width/2 - cx, b.boundingBox.y + b.boundingBox.height/2 - cy) : 9e9;
@@ -11447,7 +11454,8 @@ async function _runNativeScanner(video) {
     scanning = false;
     requestAnimationFrame(scan);
   };
-  requestAnimationFrame(scan);
+  // Small delay to let camera warm up before first detect
+  setTimeout(() => requestAnimationFrame(scan), 300);
 }
 
 function stopScanner() {
