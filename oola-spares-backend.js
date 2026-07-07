@@ -144,7 +144,7 @@ function setupSheets() {
     { name: SHEETS.SUPPLIERS, headers: ['SupplierID','Name','Contact','Location','Email','Notes','CreatedAt'] },
     { name: SHEETS.SUPPLIER_RATES, headers: ['RateID','SupplierID','SupplierName','PartID','PartName','UnitPrice','Notes','UpdatedAt'] },
     { name: SHEETS.PURCHASES, headers: ['PurchaseID','Date','PartID','PartName','SupplierID','SupplierName','Qty','CostPrice','TotalCost','Notes'] },
-    { name: SHEETS.SALES, headers: ['SaleID','Date','PartID','PartName','Qty','SellingPrice','TotalAmount','CustomerID','CustomerName','Notes','RecordedBy'] },
+    { name: SHEETS.SALES, headers: ['SaleID','Date','PartID','PartName','Qty','SellingPrice','TotalAmount','CustomerID','CustomerName','PaymentStatus','PaidAmount','Balance','DueDate','Notes','RecordedBy'] },
     { name: SHEETS.CHECKLIST, headers: ['ItemID','PartID','PartName','TargetQty','Status','Priority','Notes','UpdatedAt'] },
     { name: SHEETS.SETTINGS, headers: ['Key','Value'] },
     { name: SHEETS.NOTIFICATIONS, headers: ['NotifID','ToUser','FromUser','Type','Message','OTP','CreatedAt','Read'] },
@@ -577,6 +577,9 @@ function getAll() {
       SaleID: String(s.SaleID||''), Date: String(s.Date||''),
       PartID: String(s.PartID||''), PartName: s.PartName||'',
       Qty: s.Qty||0, SellingPrice: s.SellingPrice||0, TotalAmount: s.TotalAmount||0,
+      CustomerID: String(s.CustomerID||''), CustomerName: s.CustomerName||'',
+      PaymentStatus: s.PaymentStatus||'paid', PaidAmount: s.PaidAmount!==undefined?s.PaidAmount:(s.TotalAmount||0),
+      Balance: s.Balance||0, DueDate: String(s.DueDate||''),
       Notes: s.Notes||''
     })),
     purchases: purchases.map(p => ({
@@ -729,6 +732,8 @@ function getTransactions() {
       PartID: String(s.PartID||''), PartName: s.PartName||'',
       Qty: s.Qty||0, SellingPrice: s.SellingPrice||0, TotalAmount: s.TotalAmount||0,
       CustomerID: String(s.CustomerID||''), CustomerName: s.CustomerName||'',
+      PaymentStatus: s.PaymentStatus||'paid', PaidAmount: s.PaidAmount!==undefined?s.PaidAmount:(s.TotalAmount||0),
+      Balance: s.Balance||0, DueDate: String(s.DueDate||''),
       Notes: s.Notes||'', RecordedBy: s.RecordedBy||''
     })),
     purchases: purchases.map(p => ({
@@ -1376,6 +1381,7 @@ function saveSale(data) {
       case 'PaymentStatus': row.push(payStatus); break;
       case 'PaidAmount': row.push(paidAmount); break;
       case 'Balance': row.push(balance); break;
+      case 'DueDate': row.push(data.DueDate || ''); break;
       case 'Notes': row.push(data.Notes || ''); break;
       case 'RecordedBy': row.push(data.RecordedBy || ''); break;
       default: row.push('');
@@ -1395,7 +1401,7 @@ function ensureSaleColumns(sheet) {
   // Add PaymentStatus, PaidAmount, Balance columns if missing
   const lastCol = sheet.getLastColumn();
   const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  const needed = ['PaymentStatus', 'PaidAmount', 'Balance'];
+  const needed = ['PaymentStatus', 'PaidAmount', 'Balance', 'DueDate'];
   let col = lastCol;
   needed.forEach(h => {
     if (headers.indexOf(h) === -1) {

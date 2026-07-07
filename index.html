@@ -7865,6 +7865,8 @@ function setPayStatus(status) {
   const creditWarn = document.getElementById('sl-credit-warn');
   if (paidWrap) paidWrap.style.display = status === 'partial' ? 'block' : 'none';
   if (creditWarn) creditWarn.style.display = (status === 'credit' || status === 'partial') ? 'block' : 'none';
+  const dueDateWrap = document.getElementById('sl-duedate-wrap');
+  if (dueDateWrap) dueDateWrap.style.display = (status === 'credit' || status === 'partial') ? 'block' : 'none';
   if (status === 'partial') calcCreditBalance();
 }
 
@@ -7974,6 +7976,10 @@ function showAddSaleModal() {
     </div>
     <div id="sl-credit-warn" style="display:none;background:rgba(240,93,93,.1);border:1px solid rgba(240,93,93,.3);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;color:var(--red)">
       ⚠️ This sale will be recorded as a <strong>debt</strong>. Make sure a customer is selected above.
+    </div>
+    <div id="sl-duedate-wrap" style="display:none;margin-bottom:10px">
+      <label>Payment due by <span style="font-weight:400;color:var(--text3)">(optional — for reminders)</span></label>
+      <input id="sl-duedate" type="date" style="width:100%;box-sizing:border-box" />
     </div>
 
     <button class="btn btn-primary" onclick="saveSale()">Save Sale</button>
@@ -8093,6 +8099,7 @@ async function saveSale() {
       CustomerID: custVal[0] || '', CustomerName: custVal[1] || '',
       Notes: val('sl-notes'),
       PaymentStatus: payStatus, PaidAmount: paidAmount, Balance: balance,
+      DueDate: val('sl-duedate') || '',
       RecordedBy: state.currentUser || state.currentRole || 'Admin'
     });
     if (res.success) {
@@ -8120,6 +8127,7 @@ async function saveSale() {
       CustomerID: custVal[0]||'', CustomerName: custVal[1]||'',
       Notes: val('sl-notes'),
       PaymentStatus: payStatus, PaidAmount: paidAmount, Balance: balance,
+      DueDate: val('sl-duedate') || '',
       RecordedBy: state.currentUser||state.currentRole||'Admin'
     };
     state.sales.push(saleData);
@@ -11156,14 +11164,48 @@ async function saveCustomer() {
   }
 }
 
+// Get earliest overdue due date for a customer (null if none overdue)
+function getCustomerOverdue(customerId) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const overdueSales = state.sales.filter(s =>
+    s.CustomerID === customerId && parseFloat(s.Balance) > 0 &&
+    s.DueDate && new Date(s.DueDate) < today
+  );
+  if (!overdueSales.length) return null;
+  const oldest = overdueSales.sort((a,b) => new Date(a.DueDate) - new Date(b.DueDate))[0];
+  const days = Math.floor((today - new Date(oldest.DueDate)) / (1000*60*60*24));
+  return { dueDate: oldest.DueDate, daysOverdue: days };
+}
+
+function sendDebtReminder(customerId, customerName, phone, amount) {
+  const shop = (state.settings && state.settings.shopName) || 'Oola Spares';
+  // Clean phone → international format for WhatsApp (Uganda +256)
+  let ph = String(phone).replace(/[^0-9]/g, '');
+  if (ph.startsWith('0')) ph = '256' + ph.slice(1);
+  else if (ph.startsWith('256')) { /* already ok */ }
+  else if (ph.length === 9) ph = '256' + ph;
+
+  const msg = `Hello ${customerName}, this is a friendly reminder from ${shop}. ` +
+    `You have an outstanding balance of UGX ${amount.toLocaleString()}. ` +
+    `Kindly clear it when you can. Thank you!`;
+
+  const url = `https://wa.me/${ph}?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
+}
+
 function showDebtsView() {
   // All customers who owe money, sorted by amount
   const debtors = state.customers
-    .map(c => ({ ...c, debt: getCustomerDebt(c.CustomerID) }))
+    .map(c => ({ ...c, debt: getCustomerDebt(c.CustomerID), overdue: getCustomerOverdue(c.CustomerID) }))
     .filter(c => c.debt > 0)
-    .sort((a, b) => b.debt - a.debt);
+    .sort((a, b) => {
+      // Overdue first, then by amount
+      if (!!a.overdue !== !!b.overdue) return a.overdue ? -1 : 1;
+      return b.debt - a.debt;
+    });
 
   const total = getTotalDebts();
+  const overdueCount = debtors.filter(c => c.overdue).length;
 
   showModal(`
     <div class="modal-header">
@@ -11173,22 +11215,30 @@ function showDebtsView() {
     <div style="background:rgba(240,93,93,.1);border:1px solid rgba(240,93,93,.3);border-radius:12px;padding:14px;margin-bottom:14px;text-align:center">
       <div style="font-size:12px;color:var(--red);font-weight:700">TOTAL OUTSTANDING</div>
       <div style="font-size:28px;font-weight:900;color:var(--red);font-family:var(--mono)">${fmtMoney(total)}</div>
+      ${overdueCount > 0 ? `<div style="font-size:11px;color:var(--red);margin-top:4px">⏰ ${overdueCount} overdue</div>` : ''}
     </div>
     <div style="max-height:50vh;overflow-y:auto">
       ${debtors.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text3)">🎉 No outstanding debts!</div>' :
         debtors.map(c => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:700;color:var(--fg)">${c.Name}</div>
-            ${c.Phone ? `<div style="font-size:11px;color:var(--text3)">${c.Phone}</div>` : ''}
+        <div style="padding:12px;border:1.5px solid ${c.overdue?'rgba(240,93,93,.4)':'var(--border)'};border-radius:10px;margin-bottom:8px;${c.overdue?'background:rgba(240,93,93,.05)':''}">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:700;color:var(--fg)">${c.Name}</div>
+              ${c.Phone ? `<div style="font-size:11px;color:var(--text3)">${c.Phone}</div>` : ''}
+              ${c.overdue ? `<div style="font-size:11px;color:var(--red);font-weight:700;margin-top:2px">⏰ ${c.overdue.daysOverdue} day${c.overdue.daysOverdue!==1?'s':''} overdue</div>` : ''}
+            </div>
+            <div style="text-align:right;margin-right:8px">
+              <div style="font-size:15px;font-weight:800;color:var(--red)">${fmtMoney(c.debt)}</div>
+            </div>
+            <button onclick="recordDebtPayment('${c.CustomerID}','${(c.Name||'').replace(/'/g,'&#39;')}',${c.debt})"
+              style="padding:8px 12px;border-radius:8px;border:1px solid var(--green);background:rgba(45,212,160,.12);color:var(--green);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">
+              💵 Pay
+            </button>
           </div>
-          <div style="text-align:right;margin-right:8px">
-            <div style="font-size:15px;font-weight:800;color:var(--red)">${fmtMoney(c.debt)}</div>
-          </div>
-          <button onclick="recordDebtPayment('${c.CustomerID}','${(c.Name||'').replace(/'/g,'&#39;')}',${c.debt})"
-            style="padding:8px 12px;border-radius:8px;border:1px solid var(--green);background:rgba(45,212,160,.12);color:var(--green);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">
-            💵 Pay
-          </button>
+          ${c.Phone ? `<button onclick="sendDebtReminder('${c.CustomerID}','${(c.Name||'').replace(/'/g,'&#39;')}','${c.Phone}',${c.debt})"
+            style="width:100%;margin-top:8px;padding:8px;border-radius:8px;border:1px solid rgba(37,211,102,.4);background:rgba(37,211,102,.08);color:#25d366;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">
+            💬 Send WhatsApp Reminder
+          </button>` : ''}
         </div>`).join('')}
     </div>
   `);
