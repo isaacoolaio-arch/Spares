@@ -2876,6 +2876,124 @@ function fabAction() {
 // ============================================================
 // DASHBOARD
 // ============================================================
+// ── CASH RECONCILIATION ──
+const UGX_DENOMS = [50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50];
+
+function showCashReconcile() {
+  const today = todayStr();
+  const todaySales = state.sales.filter(s => s.Date === today);
+  const todayExpenses = (state.expenses||[]).filter(e => e.Date === today);
+  const todayCashIn = todaySales.reduce((sum,s) => {
+    const paid = s.PaidAmount !== undefined ? parseFloat(s.PaidAmount) : parseFloat(s.TotalAmount);
+    return sum + (paid||0);
+  }, 0);
+  const todayExpTotal = todayExpenses.reduce((sum,e) => sum + (parseFloat(e.Amount)||0), 0);
+  const expected = todayCashIn - todayExpTotal;
+
+  showModal(`
+    <div class="modal-header">
+      <div class="modal-title">💵 Count Cash Drawer</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span style="color:var(--text3)">Cash received today</span>
+        <span style="font-weight:700;color:var(--green)">${fmtMoney(todayCashIn)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span style="color:var(--text3)">Cash expenses today</span>
+        <span style="font-weight:700;color:var(--red)">−${fmtMoney(todayExpTotal)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;border-top:1px solid var(--border);padding-top:6px;margin-top:6px">
+        <span style="font-weight:700">Expected in drawer</span>
+        <span style="font-weight:900;color:var(--accent);font-family:var(--mono)">${fmtMoney(expected)}</span>
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Count each note/coin you have:</div>
+    <div style="max-height:38vh;overflow-y:auto;margin-bottom:14px">
+      ${UGX_DENOMS.map(d => `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="width:70px;font-size:13px;font-weight:700;font-family:var(--mono);color:var(--text2)">${d.toLocaleString()}</span>
+          <span style="color:var(--text3)">×</span>
+          <input type="number" min="0" value="0" id="denom-${d}" data-denom="${d}"
+            oninput="calcCashTotal()" inputmode="numeric"
+            style="width:70px;text-align:center;font-size:15px;font-weight:700;padding:6px;font-family:var(--mono)" />
+          <span style="flex:1;text-align:right;font-size:13px;font-family:var(--mono);color:var(--text3)" id="denom-sub-${d}">0</span>
+        </div>`).join('')}
+    </div>
+
+    <div id="cash-count-summary" style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px">
+        <span>Counted total</span>
+        <span id="cash-counted" style="font-weight:900;font-family:var(--mono)">UGX 0</span>
+      </div>
+      <div id="cash-diff-row" style="display:flex;justify-content:space-between;font-size:14px;border-top:1px solid var(--border);padding-top:6px;margin-top:6px">
+        <span>Difference</span>
+        <span id="cash-diff" style="font-weight:900;font-family:var(--mono)">—</span>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="saveCashCount(${expected})">✓ Save Count</button>
+  `);
+  window._cashExpected = expected;
+}
+
+function calcCashTotal() {
+  let total = 0;
+  UGX_DENOMS.forEach(d => {
+    const count = parseInt(document.getElementById('denom-'+d)?.value) || 0;
+    const sub = count * d;
+    total += sub;
+    const subEl = document.getElementById('denom-sub-'+d);
+    if (subEl) subEl.textContent = sub > 0 ? sub.toLocaleString() : '0';
+  });
+  const countedEl = document.getElementById('cash-counted');
+  if (countedEl) countedEl.textContent = 'UGX ' + total.toLocaleString();
+
+  const expected = window._cashExpected || 0;
+  const diff = total - expected;
+  const diffEl = document.getElementById('cash-diff');
+  if (diffEl) {
+    if (diff === 0) { diffEl.textContent = '✓ Balanced'; diffEl.style.color = 'var(--green)'; }
+    else if (diff > 0) { diffEl.textContent = '+' + diff.toLocaleString() + ' surplus'; diffEl.style.color = '#f59e0b'; }
+    else { diffEl.textContent = diff.toLocaleString() + ' short'; diffEl.style.color = 'var(--red)'; }
+  }
+}
+
+async function saveCashCount(expected) {
+  let counted = 0;
+  UGX_DENOMS.forEach(d => {
+    counted += (parseInt(document.getElementById('denom-'+d)?.value) || 0) * d;
+  });
+  const diff = counted - expected;
+  const today = todayStr();
+
+  // Store as a special expense-like record / or settings entry for the day
+  const record = {
+    date: today, expected: expected, counted: counted, difference: diff,
+    countedBy: state.currentUser || state.currentRole || 'Admin', time: new Date().toISOString()
+  };
+  try {
+    // Save locally — cash counts are a daily audit log kept on device
+    await IDB.set('cashcount_' + today, JSON.stringify(record));
+    // Also keep a running list for history
+    let history = [];
+    try { const h = await IDB.get('cashcount_history'); if (h) history = JSON.parse(h); } catch(e2) {}
+    history = history.filter(r => r.date !== today); // replace today if re-counted
+    history.unshift(record);
+    history = history.slice(0, 90); // keep 90 days
+    await IDB.set('cashcount_history', JSON.stringify(history));
+  } catch(e) {}
+
+  closeModal();
+  let msg = 'Cash counted: ' + fmtMoney(counted);
+  if (diff === 0) msg += ' — balanced ✓';
+  else if (diff > 0) msg += ' — ' + fmtMoney(diff) + ' surplus';
+  else msg += ' — ' + fmtMoney(Math.abs(diff)) + ' SHORT ⚠️';
+  toast(msg, diff < 0 ? 'error' : 'success');
+}
+
 function renderDashboard() {
   const parts     = state.parts;
   const sales     = state.sales;
@@ -2949,6 +3067,27 @@ function renderDashboard() {
         <div class="stat-value ${pending>0?'accent':'green'}">${pending}</div>
         <div class="stat-sub">pending items</div>
       </div>
+    </div>`;
+
+  // Cash reconciliation card
+  const todayExpenses = (state.expenses||[]).filter(e => e.Date === today);
+  const todayExpTotal = todayExpenses.reduce((sum,e) => sum + (parseFloat(e.Amount)||0), 0);
+  // Cash received = paid portions of today's sales
+  const todayCashIn = todaySales.reduce((sum,s) => {
+    const paid = s.PaidAmount !== undefined ? parseFloat(s.PaidAmount) : parseFloat(s.TotalAmount);
+    return sum + (paid||0);
+  }, 0);
+  const expectedCash = todayCashIn - todayExpTotal;
+
+  html += `
+    <div onclick="showCashReconcile()" style="background:rgba(45,212,160,.06);border:1px solid rgba(45,212,160,.2);
+      border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:11px;color:var(--green);font-weight:700">💵 EXPECTED CASH TODAY</div>
+        <div style="font-size:20px;font-weight:900;color:var(--green);font-family:var(--mono);margin-top:2px">${fmtMoney(expectedCash)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${fmtMoney(todayCashIn)} in − ${fmtMoney(todayExpTotal)} expenses · tap to count drawer</div>
+      </div>
+      <div style="font-size:24px">›</div>
     </div>`;
 
   // Today summary bar

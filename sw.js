@@ -1,4 +1,4 @@
-const CACHE = 'oola-spares-v143';
+const CACHE = 'oola-spares-v144';
 const STATIC = ['./manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('message', e => {
