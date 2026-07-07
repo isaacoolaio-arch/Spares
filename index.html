@@ -11213,31 +11213,39 @@ function showScannerModal() {
       <button class="modal-close" onclick="stopScanner();closeModal()">✕</button>
     </div>
 
-    <!-- Compact camera + status row -->
-    <div style="display:flex;gap:10px;margin-bottom:12px;align-items:flex-start">
-      <div id="scanner-wrap" style="position:relative;width:160px;height:160px;flex-shrink:0;
-        border-radius:12px;overflow:hidden;background:#111">
-        <video id="scanner-video" style="width:100%;height:100%;object-fit:cover" playsinline muted></video>
-        <!-- Aim box -->
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-          <div style="width:70%;height:70%;border:2px solid rgba(240,165,0,.9);border-radius:6px;position:relative;overflow:hidden">
-            <div style="position:absolute;left:0;right:0;height:2px;background:rgba(240,165,0,.8);
-              animation:scanLine 1.8s ease-in-out infinite"></div>
-          </div>
+    <!-- Large full-width viewfinder -->
+    <div id="scanner-wrap" style="position:relative;width:100%;height:260px;
+      border-radius:14px;overflow:hidden;background:#000;margin-bottom:10px">
+      <video id="scanner-video" style="width:100%;height:100%;object-fit:cover" playsinline muted autoplay></video>
+      <!-- Aim box -->
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+        <div id="scanner-aimbox" style="width:78%;height:52%;border:2.5px solid rgba(240,165,0,.95);border-radius:10px;position:relative;overflow:hidden;box-shadow:0 0 0 2000px rgba(0,0,0,.35)">
+          <div style="position:absolute;left:0;right:0;height:2px;background:var(--accent);box-shadow:0 0 8px var(--accent);
+            animation:scanLine 1.5s ease-in-out infinite"></div>
+          <!-- corner marks -->
+          <div style="position:absolute;top:-2px;left:-2px;width:20px;height:20px;border-top:3px solid #fff;border-left:3px solid #fff;border-radius:10px 0 0 0"></div>
+          <div style="position:absolute;top:-2px;right:-2px;width:20px;height:20px;border-top:3px solid #fff;border-right:3px solid #fff;border-radius:0 10px 0 0"></div>
+          <div style="position:absolute;bottom:-2px;left:-2px;width:20px;height:20px;border-bottom:3px solid #fff;border-left:3px solid #fff;border-radius:0 0 0 10px"></div>
+          <div style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-bottom:3px solid #fff;border-right:3px solid #fff;border-radius:0 0 10px 0"></div>
         </div>
       </div>
-      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
-        <div id="scanner-status" style="font-size:12px;color:var(--text2);font-weight:600;
-          background:var(--surface2);border-radius:8px;padding:8px 10px;line-height:1.5">
-          Initialising camera...
-        </div>
-        <!-- Manual search here for quick access -->
-        <input id="scanner-manual" placeholder="🔍 Or type part name..."
-          autocomplete="off" oninput="scannerManualSearch()"
-          style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);
-            background:var(--surface2);color:var(--fg);font-family:var(--font);font-size:13px;width:100%;box-sizing:border-box" />
+      <!-- Torch + Zoom controls overlay -->
+      <div style="position:absolute;bottom:10px;left:0;right:0;display:flex;gap:8px;justify-content:center;padding:0 12px">
+        <button id="scanner-torch-btn" onclick="toggleTorch()" style="display:none;padding:8px 14px;border-radius:20px;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:13px;font-weight:700;cursor:pointer;backdrop-filter:blur(4px)">🔦 Torch</button>
+        <button id="scanner-zoom-btn" onclick="cycleZoom()" style="display:none;padding:8px 14px;border-radius:20px;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:13px;font-weight:700;cursor:pointer;backdrop-filter:blur(4px)">🔍 1×</button>
       </div>
     </div>
+    <div id="scanner-status" style="font-size:12px;color:var(--text2);font-weight:600;
+      background:var(--surface2);border-radius:8px;padding:8px 10px;line-height:1.5;margin-bottom:8px;text-align:center">
+      Initialising camera...
+    </div>
+    <div style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:8px">
+      💡 For tiny barcodes: hold steady, use 🔍 zoom or 🔦 torch
+    </div>
+    <input id="scanner-manual" placeholder="🔍 Or type part name..."
+      autocomplete="off" oninput="scannerManualSearch()"
+      style="padding:10px 12px;border-radius:10px;border:1px solid var(--border);margin-bottom:10px;
+        background:var(--surface2);color:var(--fg);font-family:var(--font);font-size:13px;width:100%;box-sizing:border-box" />
     <style>@keyframes scanLine{0%,100%{top:5%}50%{top:88%}}</style>
 
     <!-- Manual search results -->
@@ -11275,19 +11283,35 @@ function showScannerModal() {
   startScanner();
 }
 
+let _scannerTrack = null;
+let _scannerZoomLevel = 1;
+
 async function startScanner() {
   const video  = document.getElementById('scanner-video');
   const status = document.getElementById('scanner-status');
   if (!video) return;
   try {
+    // Request highest resolution for tiny barcode detail
     _scannerStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      video: {
+        facingMode: 'environment',
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 },
+        // Prefer continuous autofocus for close-up tiny barcodes
+        focusMode: 'continuous',
+        advanced: [{ focusMode: 'continuous' }]
+      }
     });
     video.srcObject = _scannerStream;
     await video.play();
     _scannerActive = true;
-    if (status) status.textContent = 'Point camera at barcode or QR code';
-    // BarcodeDetector is always available — native on Chrome/Android, polyfill on Safari/iOS
+
+    // Get the video track for torch/zoom capabilities
+    _scannerTrack = _scannerStream.getVideoTracks()[0];
+    _scannerZoomLevel = 1;
+    setupScannerControls();
+
+    if (status) status.textContent = '📷 Point at barcode — hold steady';
     _runNativeScanner(video);
   } catch(e) {
     if (status) status.textContent = e.name === 'NotAllowedError'
@@ -11296,25 +11320,74 @@ async function startScanner() {
   }
 }
 
+function setupScannerControls() {
+  if (!_scannerTrack) return;
+  const caps = _scannerTrack.getCapabilities ? _scannerTrack.getCapabilities() : {};
+  // Torch
+  const torchBtn = document.getElementById('scanner-torch-btn');
+  if (torchBtn && caps.torch) torchBtn.style.display = 'block';
+  // Zoom
+  const zoomBtn = document.getElementById('scanner-zoom-btn');
+  if (zoomBtn && caps.zoom) {
+    zoomBtn.style.display = 'block';
+    window._scannerZoomCaps = caps.zoom; // {min, max, step}
+  }
+}
+
+async function toggleTorch() {
+  if (!_scannerTrack) return;
+  try {
+    const settings = _scannerTrack.getSettings();
+    const on = !settings.torch;
+    await _scannerTrack.applyConstraints({ advanced: [{ torch: on }] });
+    const btn = document.getElementById('scanner-torch-btn');
+    if (btn) { btn.style.background = on ? 'rgba(240,165,0,.8)' : 'rgba(0,0,0,.6)'; btn.textContent = on ? '🔦 On' : '🔦 Torch'; }
+  } catch(e) {}
+}
+
+async function cycleZoom() {
+  if (!_scannerTrack || !window._scannerZoomCaps) return;
+  const caps = window._scannerZoomCaps;
+  // Cycle 1× → 2× → 3× → max → back to 1×
+  const steps = [1, 2, 3, caps.max];
+  let idx = steps.indexOf(_scannerZoomLevel);
+  idx = (idx + 1) % steps.length;
+  _scannerZoomLevel = Math.min(steps[idx], caps.max);
+  try {
+    await _scannerTrack.applyConstraints({ advanced: [{ zoom: _scannerZoomLevel }] });
+    const btn = document.getElementById('scanner-zoom-btn');
+    if (btn) btn.textContent = '🔍 ' + _scannerZoomLevel + '×';
+  } catch(e) {}
+}
+
 async function _runNativeScanner(video) {
   const detector = new BarcodeDetector({
-    formats: ['qr_code','ean_13','ean_8','code_128','code_39','upc_a','upc_e','data_matrix','aztec','pdf417']
+    formats: ['qr_code','ean_13','ean_8','code_128','code_39','code_93','codabar','upc_a','upc_e','data_matrix','aztec','pdf417','itf']
   });
+  let lastDetectTime = 0;
   const scan = async () => {
     if (!_scannerActive) return;
     try {
       const barcodes = await detector.detect(video);
-      if (barcodes.length > 0) { onBarcodeScanned(barcodes[0].rawValue); return; }
+      if (barcodes.length > 0) {
+        // Vibrate feedback on detect (Android)
+        try { if (navigator.vibrate) navigator.vibrate(60); } catch(e) {}
+        onBarcodeScanned(barcodes[0].rawValue);
+        return;
+      }
     } catch(e) {}
-    setTimeout(scan, 300);
+    // Fast continuous loop via requestAnimationFrame (much faster than 300ms)
+    requestAnimationFrame(scan);
   };
-  scan();
+  requestAnimationFrame(scan);
 }
 
 function stopScanner() {
   _scannerActive = false;
   if (_scannerStream) { _scannerStream.getTracks().forEach(t => t.stop()); _scannerStream = null; }
   if (_scannerReader) { try { _scannerReader.reset(); } catch(e) {} _scannerReader = null; }
+  _scannerTrack = null;
+  _scannerZoomLevel = 1;
 }
 
 function onBarcodeScanned(code) {
