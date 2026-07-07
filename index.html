@@ -11311,7 +11311,7 @@ async function startScanner() {
     _scannerZoomLevel = 1;
     setupScannerControls();
 
-    if (status) status.textContent = '📷 Point at barcode — hold steady';
+    if (status) status.textContent = '📷 Point at QR or barcode — hold steady';
     _runNativeScanner(video);
   } catch(e) {
     if (status) status.textContent = e.name === 'NotAllowedError'
@@ -11362,21 +11362,40 @@ async function cycleZoom() {
 
 async function _runNativeScanner(video) {
   const detector = new BarcodeDetector({
-    formats: ['qr_code','ean_13','ean_8','code_128','code_39','code_93','codabar','upc_a','upc_e','data_matrix','aztec','pdf417','itf']
+    formats: ['qr_code','micro_qr_code','ean_13','ean_8','code_128','code_39','code_93','codabar','upc_a','upc_e','data_matrix','aztec','pdf417','itf']
   });
-  let lastDetectTime = 0;
+  let scanning = false;
   const scan = async () => {
     if (!_scannerActive) return;
+    // Skip if a detect is already in flight (prevents pile-up on slow frames)
+    if (scanning) { requestAnimationFrame(scan); return; }
+    scanning = true;
     try {
-      const barcodes = await detector.detect(video);
-      if (barcodes.length > 0) {
-        // Vibrate feedback on detect (Android)
-        try { if (navigator.vibrate) navigator.vibrate(60); } catch(e) {}
-        onBarcodeScanned(barcodes[0].rawValue);
-        return;
+      // Only scan when video has valid frame data
+      if (video.readyState >= 2 && video.videoWidth > 0) {
+        const barcodes = await detector.detect(video);
+        if (barcodes && barcodes.length > 0) {
+          // Pick the code most centered in the frame (best focus)
+          let best = barcodes[0];
+          if (barcodes.length > 1) {
+            const cx = video.videoWidth / 2, cy = video.videoHeight / 2;
+            best = barcodes.reduce((a, b) => {
+              const da = a.boundingBox ? Math.hypot(a.boundingBox.x + a.boundingBox.width/2 - cx, a.boundingBox.y + a.boundingBox.height/2 - cy) : 9e9;
+              const db = b.boundingBox ? Math.hypot(b.boundingBox.x + b.boundingBox.width/2 - cx, b.boundingBox.y + b.boundingBox.height/2 - cy) : 9e9;
+              return db < da ? b : a;
+            });
+          }
+          const val = best.rawValue;
+          if (val) {
+            try { if (navigator.vibrate) navigator.vibrate(60); } catch(e) {}
+            scanning = false;
+            onBarcodeScanned(val);
+            return;
+          }
+        }
       }
     } catch(e) {}
-    // Fast continuous loop via requestAnimationFrame (much faster than 300ms)
+    scanning = false;
     requestAnimationFrame(scan);
   };
   requestAnimationFrame(scan);
@@ -11421,7 +11440,7 @@ function resetScanner() {
   document.getElementById('scanner-actions').style.display = 'none';
   document.getElementById('scanner-notfound').style.display = 'none';
   const status = document.getElementById('scanner-status');
-  if (status) status.textContent = 'Point camera at barcode or QR code';
+  if (status) status.textContent = '📷 Point at QR or barcode — hold steady';
   _scannerActive = true; startScanner();
 }
 
