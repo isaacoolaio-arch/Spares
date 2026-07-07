@@ -11290,6 +11290,17 @@ async function startScanner() {
   const video  = document.getElementById('scanner-video');
   const status = document.getElementById('scanner-status');
   if (!video) return;
+
+  // Diagnostic checks
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (status) status.textContent = '⚠️ Camera not available in this browser — use search below';
+    return;
+  }
+  if (typeof BarcodeDetector === 'undefined') {
+    if (status) status.textContent = '⚠️ Barcode scanning not supported — use search below';
+    return;
+  }
+
   try {
     // Request high resolution for tiny barcode detail — with safe fallback
     try {
@@ -11325,9 +11336,17 @@ async function startScanner() {
     if (status) status.textContent = '📷 Point at QR or barcode — hold steady';
     _runNativeScanner(video);
   } catch(e) {
-    if (status) status.textContent = e.name === 'NotAllowedError'
-      ? '📷 Camera permission denied — use search below'
-      : 'Camera unavailable — use search below';
+    let msg = 'Camera unavailable — use search below';
+    if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError')
+      msg = '📷 Allow camera access in your browser settings, then tap ↩ to retry';
+    else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError')
+      msg = '📷 No camera found on this device';
+    else if (e.name === 'NotReadableError' || e.name === 'TrackStartError')
+      msg = '📷 Camera busy — close other apps using the camera, then retry';
+    else if (e.name === 'OverconstrainedError')
+      msg = '📷 Camera setup failed — trying basic mode...';
+    if (status) status.textContent = msg;
+    console.log('Scanner error:', e.name, e.message);
   }
 }
 
