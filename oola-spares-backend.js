@@ -1329,27 +1329,80 @@ function getSales(data) {
 function saveSale(data) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(SHEETS.SALES);
-  const id = 'SAL-' + Date.now();
+
+  // Ensure payment columns exist in header
+  ensureSaleColumns(sheet);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
   const qty = parseInt(data.Qty) || 0;
   const price = parseFloat(data.SellingPrice) || 0;
   const total = qty * price;
+  const payStatus = data.PaymentStatus || 'paid';
+  const paidAmount = data.PaidAmount !== undefined ? parseFloat(data.PaidAmount) : total;
+  const balance = data.Balance !== undefined ? parseFloat(data.Balance) : 0;
 
-  sheet.appendRow([
-    id, data.Date, data.PartID, data.PartName,
-    qty, price, total,
-    data.CustomerID || '', data.CustomerName || '',
-    data.Notes || '', data.RecordedBy || ''
-  ]);
+  // If SaleID provided AND it exists → this is an update (e.g. debt payment)
+  if (data.SaleID) {
+    const rows = sheet.getDataRange().getValues();
+    const idCol = headers.indexOf('SaleID');
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][idCol]) === String(data.SaleID)) {
+        // Update only payment fields (don't re-deduct stock)
+        const psCol = headers.indexOf('PaymentStatus');
+        const paCol = headers.indexOf('PaidAmount');
+        const balCol = headers.indexOf('Balance');
+        if (psCol >= 0)  sheet.getRange(i+1, psCol+1).setValue(payStatus);
+        if (paCol >= 0)  sheet.getRange(i+1, paCol+1).setValue(paidAmount);
+        if (balCol >= 0) sheet.getRange(i+1, balCol+1).setValue(balance);
+        return { success: true, id: data.SaleID, updated: true };
+      }
+    }
+  }
 
-  // Deduct stock
+  // New sale
+  const id = 'SAL-' + Date.now();
+  const row = [];
+  headers.forEach(h => {
+    switch(h) {
+      case 'SaleID': row.push(id); break;
+      case 'Date': row.push(data.Date); break;
+      case 'PartID': row.push(data.PartID); break;
+      case 'PartName': row.push(data.PartName); break;
+      case 'Qty': row.push(qty); break;
+      case 'SellingPrice': row.push(price); break;
+      case 'Total': row.push(total); break;
+      case 'CustomerID': row.push(data.CustomerID || ''); break;
+      case 'CustomerName': row.push(data.CustomerName || ''); break;
+      case 'PaymentStatus': row.push(payStatus); break;
+      case 'PaidAmount': row.push(paidAmount); break;
+      case 'Balance': row.push(balance); break;
+      case 'Notes': row.push(data.Notes || ''); break;
+      case 'RecordedBy': row.push(data.RecordedBy || ''); break;
+      default: row.push('');
+    }
+  });
+  sheet.appendRow(row);
+
   updatePartStock(data.PartID, qty, 'deduct');
-
-  // Update customer stats if linked
   if (data.CustomerID) {
     updateCustomerStats(ss, data.CustomerID, 1, total);
   }
 
   return { success: true, id: id, message: 'Sale recorded' };
+}
+
+function ensureSaleColumns(sheet) {
+  // Add PaymentStatus, PaidAmount, Balance columns if missing
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const needed = ['PaymentStatus', 'PaidAmount', 'Balance'];
+  let col = lastCol;
+  needed.forEach(h => {
+    if (headers.indexOf(h) === -1) {
+      col++;
+      sheet.getRange(1, col).setValue(h);
+    }
+  });
 }
 
 function updateCustomerStats(ss, customerId, purchaseDelta, spentDelta) {

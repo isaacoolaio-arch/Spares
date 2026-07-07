@@ -7840,6 +7840,48 @@ async function clearAllChecklist() {
 // ============================================================
 // SALES MODAL
 // ============================================================
+function setPayStatus(status) {
+  document.getElementById('sl-paystatus').value = status;
+  // Reset all button styles
+  ['paid','credit','partial'].forEach(s => {
+    const btn = document.getElementById('pay-' + s);
+    if (btn) {
+      btn.style.border = '1.5px solid var(--border)';
+      btn.style.background = 'var(--surface2)';
+      btn.style.color = 'var(--text3)';
+    }
+  });
+  // Highlight selected
+  const active = document.getElementById('pay-' + status);
+  const colors = { paid: 'var(--green)', credit: 'var(--red)', partial: '#f59e0b' };
+  const bgs = { paid: 'rgba(45,212,160,.12)', credit: 'rgba(240,93,93,.12)', partial: 'rgba(245,158,11,.12)' };
+  if (active) {
+    active.style.border = '1.5px solid ' + colors[status];
+    active.style.background = bgs[status];
+    active.style.color = colors[status];
+  }
+  // Show/hide amount field and warnings
+  const paidWrap = document.getElementById('sl-paid-amount-wrap');
+  const creditWarn = document.getElementById('sl-credit-warn');
+  if (paidWrap) paidWrap.style.display = status === 'partial' ? 'block' : 'none';
+  if (creditWarn) creditWarn.style.display = (status === 'credit' || status === 'partial') ? 'block' : 'none';
+  if (status === 'partial') calcCreditBalance();
+}
+
+function calcCreditBalance() {
+  const qty = parseFloat(document.getElementById('sl-qty')?.value) || 0;
+  const price = parseFloat(document.getElementById('sl-price')?.value) || 0;
+  const total = qty * price;
+  const paid = parseFloat(document.getElementById('sl-paid-amount')?.value) || 0;
+  const balance = total - paid;
+  const el = document.getElementById('sl-balance-info');
+  if (el) {
+    if (balance > 0) el.textContent = 'Balance owed: UGX ' + balance.toLocaleString();
+    else if (balance < 0) el.textContent = 'Change to give: UGX ' + Math.abs(balance).toLocaleString();
+    else el.textContent = 'Fully paid';
+  }
+}
+
 function showAddSaleModal() {
   showModal(`
     <div class="modal-header">
@@ -7916,6 +7958,24 @@ function showAddSaleModal() {
         box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
     </div>
     <input type="hidden" id="sl-customer" value="" />
+
+    <!-- Payment status -->
+    <label>Payment</label>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button type="button" id="pay-paid" onclick="setPayStatus('paid')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid var(--green);background:rgba(45,212,160,.12);color:var(--green);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Paid</button>
+      <button type="button" id="pay-credit" onclick="setPayStatus('credit')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text3);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">📋 Credit</button>
+      <button type="button" id="pay-partial" onclick="setPayStatus('partial')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text3);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">◐ Partial</button>
+    </div>
+    <input type="hidden" id="sl-paystatus" value="paid" />
+    <div id="sl-paid-amount-wrap" style="display:none;margin-bottom:10px">
+      <label>Amount Paid Now</label>
+      <input id="sl-paid-amount" type="number" placeholder="0" oninput="calcCreditBalance()" />
+      <div id="sl-balance-info" style="font-size:12px;color:var(--red);margin-top:4px;font-weight:700"></div>
+    </div>
+    <div id="sl-credit-warn" style="display:none;background:rgba(240,93,93,.1);border:1px solid rgba(240,93,93,.3);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;color:var(--red)">
+      ⚠️ This sale will be recorded as a <strong>debt</strong>. Make sure a customer is selected above.
+    </div>
+
     <button class="btn btn-primary" onclick="saveSale()">Save Sale</button>
   `);
   setTimeout(() => {
@@ -8020,11 +8080,19 @@ async function saveSale() {
     const partVal = val('sl-part').split('||');
     if (!partVal[0]) { endSubmit(btn, 'Save Sale'); toast('Please select a part first', 'error'); return; }
     const custVal = (document.getElementById('sl-customer')?.value || '').split('||');
+    const payStatus = val('sl-paystatus') || 'paid';
+    const total = (parseFloat(val('sl-qty'))||0) * (parseFloat(val('sl-price'))||0);
+    let paidAmount = total;
+    if (payStatus === 'credit') paidAmount = 0;
+    else if (payStatus === 'partial') paidAmount = parseFloat(val('sl-paid-amount'))||0;
+    const balance = Math.max(0, total - paidAmount);
+
     const res = await api('saveSale', {
       Date: val('sl-date'), PartID: partVal[0], PartName: partVal[1],
       Qty: val('sl-qty'), SellingPrice: val('sl-price'),
       CustomerID: custVal[0] || '', CustomerName: custVal[1] || '',
       Notes: val('sl-notes'),
+      PaymentStatus: payStatus, PaidAmount: paidAmount, Balance: balance,
       RecordedBy: state.currentUser || state.currentRole || 'Admin'
     });
     if (res.success) {
@@ -8039,12 +8107,20 @@ async function saveSale() {
     // Queue offline
     const partVal = val('sl-part').split('||');
     const custVal = (document.getElementById('sl-customer')?.value || '').split('||');
+    const payStatus = val('sl-paystatus') || 'paid';
+    const total = (parseFloat(val('sl-qty'))||0) * (parseFloat(val('sl-price'))||0);
+    let paidAmount = total;
+    if (payStatus === 'credit') paidAmount = 0;
+    else if (payStatus === 'partial') paidAmount = parseFloat(val('sl-paid-amount'))||0;
+    const balance = Math.max(0, total - paidAmount);
     const saleData = {
       SaleID: 'SAL-' + Date.now() + '-local',
       Date: val('sl-date'), PartID: partVal[0], PartName: partVal[1],
       Qty: val('sl-qty'), SellingPrice: val('sl-price'),
       CustomerID: custVal[0]||'', CustomerName: custVal[1]||'',
-      Notes: val('sl-notes'), RecordedBy: state.currentUser||state.currentRole||'Admin'
+      Notes: val('sl-notes'),
+      PaymentStatus: payStatus, PaidAmount: paidAmount, Balance: balance,
+      RecordedBy: state.currentUser||state.currentRole||'Admin'
     };
     state.sales.push(saleData);
     // Update stock locally
@@ -10953,14 +11029,44 @@ async function selectSaleCustomerNew(name) {
 }
 
 // ── Customers view ───────────────────────────────────────────
+// Compute outstanding balance per customer from unpaid/partial sales
+function getCustomerDebt(customerId) {
+  return state.sales
+    .filter(s => s.CustomerID === customerId && parseFloat(s.Balance) > 0)
+    .reduce((sum, s) => sum + (parseFloat(s.Balance)||0), 0);
+}
+function getTotalDebts() {
+  return state.sales.reduce((sum, s) => sum + (parseFloat(s.Balance)||0), 0);
+}
+
 function renderCustomers() {
   const q = (document.getElementById('cust-search')?.value || '').toLowerCase().trim();
+  // Attach live debt to each customer
   const customers = state.customers
     .filter(c => !q || (c.Name||'').toLowerCase().includes(q) || (c.Phone||'').includes(q))
-    .sort((a,b) => (b.TotalSpent||0) - (a.TotalSpent||0)); // top spenders first
+    .map(c => ({ ...c, _debt: getCustomerDebt(c.CustomerID) }))
+    .sort((a,b) => {
+      // Debtors first (highest debt), then top spenders
+      if (a._debt !== b._debt) return b._debt - a._debt;
+      return (b.TotalSpent||0) - (a.TotalSpent||0);
+    });
 
   const el = document.getElementById('customers-content');
   if (!el) return;
+
+  const totalDebt = getTotalDebts();
+  const debtorCount = customers.filter(c => c._debt > 0).length;
+  const debtBanner = totalDebt > 0 ? `
+    <div onclick="showDebtsView()" style="background:rgba(240,93,93,.1);border:1px solid rgba(240,93,93,.3);border-radius:12px;padding:14px;margin-bottom:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:12px;color:var(--red);font-weight:700">💰 TOTAL OWED TO YOU</div>
+        <div style="font-size:22px;font-weight:900;color:var(--red);font-family:var(--mono);margin-top:2px">${fmtMoney(totalDebt)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${debtorCount} customer${debtorCount!==1?'s':''} owe you · tap to see all</div>
+      </div>
+      <div style="font-size:24px">›</div>
+    </div>` : '';
+
+  window._customersDebtBanner = debtBanner;
 
   if (customers.length === 0) {
     el.innerHTML = `<div class="empty-state">
@@ -10971,6 +11077,7 @@ function renderCustomers() {
   }
 
   el.innerHTML = `
+    ${debtBanner}
     <div style="font-size:12px;color:var(--text3);margin-bottom:10px">
       ${customers.length} customer${customers.length!==1?'s':''}
       ${customers.filter(c=>c.TotalPurchases>0).length > 0 ? ` · ${customers.filter(c=>c.TotalPurchases>0).length} with purchases` : ''}
@@ -10990,10 +11097,13 @@ function renderCustomers() {
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-          ${(c.TotalSpent||0) > 0
-            ? `<div style="font-size:13px;font-weight:700;color:var(--accent)">${fmtMoney(c.TotalSpent)}</div>
-               <div style="font-size:11px;color:var(--text3)">${c.TotalPurchases} visit${c.TotalPurchases!==1?'s':''}</div>`
-            : `<div style="font-size:11px;color:var(--text3)">No purchases</div>`}
+          ${c._debt > 0
+            ? `<div style="font-size:14px;font-weight:800;color:var(--red)">−${fmtMoney(c._debt)}</div>
+               <div style="font-size:10px;color:var(--red)">owes you</div>`
+            : (c.TotalSpent||0) > 0
+              ? `<div style="font-size:13px;font-weight:700;color:var(--accent)">${fmtMoney(c.TotalSpent)}</div>
+                 <div style="font-size:11px;color:var(--text3)">${c.TotalPurchases} visit${c.TotalPurchases!==1?'s':''}</div>`
+              : `<div style="font-size:11px;color:var(--text3)">No purchases</div>`}
         </div>
       </div>
     </div>`).join('')}`;
@@ -11044,6 +11154,103 @@ async function saveCustomer() {
     toast('Error saving', 'error');
     endSubmit(btn, 'Save Customer');
   }
+}
+
+function showDebtsView() {
+  // All customers who owe money, sorted by amount
+  const debtors = state.customers
+    .map(c => ({ ...c, debt: getCustomerDebt(c.CustomerID) }))
+    .filter(c => c.debt > 0)
+    .sort((a, b) => b.debt - a.debt);
+
+  const total = getTotalDebts();
+
+  showModal(`
+    <div class="modal-header">
+      <div class="modal-title">💰 Who Owes Me</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div style="background:rgba(240,93,93,.1);border:1px solid rgba(240,93,93,.3);border-radius:12px;padding:14px;margin-bottom:14px;text-align:center">
+      <div style="font-size:12px;color:var(--red);font-weight:700">TOTAL OUTSTANDING</div>
+      <div style="font-size:28px;font-weight:900;color:var(--red);font-family:var(--mono)">${fmtMoney(total)}</div>
+    </div>
+    <div style="max-height:50vh;overflow-y:auto">
+      ${debtors.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text3)">🎉 No outstanding debts!</div>' :
+        debtors.map(c => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:700;color:var(--fg)">${c.Name}</div>
+            ${c.Phone ? `<div style="font-size:11px;color:var(--text3)">${c.Phone}</div>` : ''}
+          </div>
+          <div style="text-align:right;margin-right:8px">
+            <div style="font-size:15px;font-weight:800;color:var(--red)">${fmtMoney(c.debt)}</div>
+          </div>
+          <button onclick="recordDebtPayment('${c.CustomerID}','${(c.Name||'').replace(/'/g,'&#39;')}',${c.debt})"
+            style="padding:8px 12px;border-radius:8px;border:1px solid var(--green);background:rgba(45,212,160,.12);color:var(--green);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">
+            💵 Pay
+          </button>
+        </div>`).join('')}
+    </div>
+  `);
+}
+
+function recordDebtPayment(customerId, customerName, currentDebt) {
+  showModal(`
+    <div class="modal-header">
+      <div class="modal-title">💵 Record Payment</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px">${customerName}</div>
+    <div style="font-size:13px;color:var(--red);margin-bottom:16px">Currently owes: <strong>${fmtMoney(currentDebt)}</strong></div>
+    <label>Payment Amount</label>
+    <input id="debt-pay-amount" type="number" inputmode="numeric" value="${currentDebt}" style="font-size:24px;font-weight:800;font-family:var(--mono);text-align:center" />
+    <div style="display:flex;gap:8px;margin:10px 0">
+      <button onclick="document.getElementById('debt-pay-amount').value=${currentDebt}" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Full: ${fmtMoney(currentDebt)}</button>
+      <button onclick="document.getElementById('debt-pay-amount').value=${Math.round(currentDebt/2)}" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Half</button>
+    </div>
+    <button class="btn btn-primary" onclick="applyDebtPayment('${customerId}',${currentDebt})">✓ Confirm Payment</button>
+  `);
+}
+
+async function applyDebtPayment(customerId, currentDebt) {
+  const amount = parseFloat(document.getElementById('debt-pay-amount')?.value) || 0;
+  if (amount <= 0) { toast('Enter a valid amount', 'error'); return; }
+
+  // Apply payment across the customer's unpaid sales, oldest first
+  let remaining = amount;
+  const unpaidSales = state.sales
+    .filter(s => s.CustomerID === customerId && parseFloat(s.Balance) > 0)
+    .sort((a, b) => new Date(a.Date) - new Date(b.Date));
+
+  for (const sale of unpaidSales) {
+    if (remaining <= 0) break;
+    const bal = parseFloat(sale.Balance) || 0;
+    const pay = Math.min(bal, remaining);
+    const newBalance = bal - pay;
+    const newPaid = (parseFloat(sale.PaidAmount)||0) + pay;
+    remaining -= pay;
+
+    // Update locally + queue/save
+    sale.Balance = newBalance;
+    sale.PaidAmount = newPaid;
+    sale.PaymentStatus = newBalance <= 0 ? 'paid' : 'partial';
+    try {
+      await api('saveSale', {
+        SaleID: sale.SaleID, Date: sale.Date, PartID: sale.PartID, PartName: sale.PartName,
+        Qty: sale.Qty, SellingPrice: sale.SellingPrice,
+        CustomerID: sale.CustomerID, CustomerName: sale.CustomerName,
+        PaymentStatus: sale.PaymentStatus, PaidAmount: newPaid, Balance: newBalance,
+        Notes: sale.Notes, RecordedBy: sale.RecordedBy
+      });
+    } catch(e) {
+      try { await IDB.setAll('sales', state.sales); } catch(e2) {}
+    }
+  }
+
+  try { await IDB.setAll('sales', state.sales); } catch(e) {}
+  closeModal();
+  renderCustomers();
+  toast('Payment of ' + fmtMoney(amount) + ' recorded ✓', 'success');
 }
 
 function showCustomerProfile(customerId) {
