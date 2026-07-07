@@ -11291,17 +11291,21 @@ async function startScanner() {
   const status = document.getElementById('scanner-status');
   if (!video) return;
   try {
-    // Request highest resolution for tiny barcode detail
-    _scannerStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'environment',
-        width:  { ideal: 1920 },
-        height: { ideal: 1080 },
-        // Prefer continuous autofocus for close-up tiny barcodes
-        focusMode: 'continuous',
-        advanced: [{ focusMode: 'continuous' }]
-      }
-    });
+    // Request high resolution for tiny barcode detail — with safe fallback
+    try {
+      _scannerStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width:  { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      });
+    } catch(e1) {
+      // Fallback to basic constraints if high-res fails
+      _scannerStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+    }
     video.srcObject = _scannerStream;
     await video.play();
     _scannerActive = true;
@@ -11309,6 +11313,13 @@ async function startScanner() {
     // Get the video track for torch/zoom capabilities
     _scannerTrack = _scannerStream.getVideoTracks()[0];
     _scannerZoomLevel = 1;
+    // Try to enable continuous autofocus (ignore if unsupported)
+    try {
+      const caps = _scannerTrack.getCapabilities ? _scannerTrack.getCapabilities() : {};
+      if (caps.focusMode && caps.focusMode.includes('continuous')) {
+        await _scannerTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+      }
+    } catch(e) {}
     setupScannerControls();
 
     if (status) status.textContent = '📷 Point at QR or barcode — hold steady';
@@ -11361,9 +11372,28 @@ async function cycleZoom() {
 }
 
 async function _runNativeScanner(video) {
-  const detector = new BarcodeDetector({
-    formats: ['qr_code','micro_qr_code','ean_13','ean_8','code_128','code_39','code_93','codabar','upc_a','upc_e','data_matrix','aztec','pdf417','itf']
-  });
+  let detector;
+  const wanted = ['qr_code','micro_qr_code','ean_13','ean_8','code_128','code_39','code_93','codabar','upc_a','upc_e','data_matrix','aztec','pdf417','itf'];
+  try {
+    // Only request formats the device actually supports (avoids throw)
+    let supported = wanted;
+    try {
+      if (BarcodeDetector.getSupportedFormats) {
+        const avail = await BarcodeDetector.getSupportedFormats();
+        supported = wanted.filter(f => avail.includes(f));
+        if (!supported.length) supported = avail; // fallback to whatever's available
+      }
+    } catch(e) {}
+    detector = new BarcodeDetector({ formats: supported });
+  } catch(e) {
+    // Last resort — create with no format restriction (scans all)
+    try { detector = new BarcodeDetector(); }
+    catch(e2) {
+      const status = document.getElementById('scanner-status');
+      if (status) status.textContent = '⚠️ Scanner not supported on this device — use search below';
+      return;
+    }
+  }
   let scanning = false;
   const scan = async () => {
     if (!_scannerActive) return;
